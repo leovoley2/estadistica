@@ -4,71 +4,74 @@ import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { es } from "date-fns/locale";
+import { useVolleyball } from "../context/VolleyballContext";
+import { setupHighDPI, smoothLine } from "../utils/canvas-utils";
 
-const useWindowSize = () => {
-  const [windowSize, setWindowSize] = useState({
-    width: window.innerWidth,
-    height: window.innerHeight
-  });
+const colorOptions = [
+  { value: '#ff0000', label: 'Rojo', class: 'bg-red-500' },
+  { value: '#0000ff', label: 'Azul', class: 'bg-blue-500' },
+  { value: '#000000', label: 'Negro', class: 'bg-black' },
+  { value: '#ffff00', label: 'Amarillo', class: 'bg-yellow-500' },
+  { value: '#ffffff', label: 'Blanco', class: 'bg-white border border-gray-300' },
+  { value: '#00ff00', label: 'Verde', class: 'bg-green-500' }
+];
 
-  useEffect(() => {
-    const handleResize = () => {
-      setWindowSize({
-        width: window.innerWidth,
-        height: window.innerHeight
-      });
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  return windowSize;
-};
+const lineWidthOptions = [
+  { value: 2, label: 'Muy delgada' },
+  { value: 3, label: 'Delgada' },
+  { value: 5, label: 'Media' },
+  { value: 8, label: 'Gruesa' }
+];
 
 const VolleyballTrends = () => {
   const navigate = useNavigate();
+  const { trendsData, setTrendsData } = useVolleyball();
   const canvasRef = useRef(null);
   const contextRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [color, setColor] = useState('#ff0000');
   const [lineWidth, setLineWidth] = useState(3);
-  const [teamName, setTeamName] = useState('');
-  const windowSize = useWindowSize();
-  const isMobile = windowSize.width < 768;
+  const [teamName, setTeamName] = useState(trendsData.teamName || '');
+  const lastPoint = useRef({ x: 0, y: 0 });
+
+  const isMobile = window.innerWidth < 768;
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const setCanvasSize = () => {
-      if (isMobile) {
-        canvas.width = window.innerWidth * 0.95;
-        canvas.height = window.innerHeight * 0.7;
-      } else {
-        canvas.width = window.innerWidth * 0.85;
-        canvas.height = window.innerHeight * 0.5;
-      }
-    };
-
-    setCanvasSize();
-    const context = canvas.getContext('2d');
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    setupHighDPI(canvas, context);
+    
     context.lineCap = 'round';
+    context.lineJoin = 'round';
     context.strokeStyle = color;
     context.lineWidth = lineWidth;
     contextRef.current = context;
 
-    drawCourt();
+    if (trendsData.canvasImage) {
+      const img = new Image();
+      img.onload = () => {
+        context.drawImage(img, 0, 0);
+      };
+      img.src = trendsData.canvasImage;
+    } else {
+      drawCourt();
+    }
 
     const handleResize = () => {
-      setCanvasSize();
-      drawCourt();
+      if (canvas) {
+        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+        setupHighDPI(canvas, context);
+        drawCourt();
+        context.putImageData(imageData, 0, 0);
+      }
     };
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [isMobile, windowSize, color, lineWidth]);
+  }, [isMobile]);
 
   const drawCourt = () => {
     const canvas = canvasRef.current;
@@ -82,7 +85,7 @@ const VolleyballTrends = () => {
       courtHeight = canvas.height * 0.85;
     } else {
       courtWidth = canvas.width * 0.9;
-      courtHeight = canvas.height * 0.8;
+      courtHeight = canvas.height * 0.7;
     }
 
     startX = (canvas.width - courtWidth) / 2;
@@ -105,7 +108,7 @@ const VolleyballTrends = () => {
       }
     }
 
-    // Líneas de la cancha
+    // Configurar estilo para las líneas de la cancha
     context.strokeStyle = '#000080';
     context.lineWidth = 4;
 
@@ -114,16 +117,16 @@ const VolleyballTrends = () => {
     context.rect(startX, startY, courtWidth, courtHeight);
     context.stroke();
 
-    // Red y detalles
+    // Red y detalles según orientación
     if (isMobile) {
       // Red horizontal para móviles
       const netY = startY + courtHeight/2;
       
-      // Sombra de la red
       context.shadowColor = 'rgba(0, 0, 0, 0.2)';
       context.shadowBlur = 5;
       context.shadowOffsetY = 2;
 
+      // Línea principal de la red
       context.beginPath();
       context.strokeStyle = '#666666';
       context.lineWidth = 6;
@@ -143,7 +146,6 @@ const VolleyballTrends = () => {
       // Red vertical para desktop
       const netX = startX + courtWidth/2;
       
-      // Sombra de la red
       context.shadowColor = 'rgba(0, 0, 0, 0.2)';
       context.shadowBlur = 5;
       context.shadowOffsetX = 2;
@@ -165,56 +167,89 @@ const VolleyballTrends = () => {
       }
     }
 
-    // Quitar sombras
+    // Restaurar configuración
     context.shadowColor = 'transparent';
     context.shadowBlur = 0;
     context.shadowOffsetX = 0;
     context.shadowOffsetY = 0;
-
-    // Restaurar estilo para dibujo
     context.strokeStyle = color;
     context.lineWidth = lineWidth;
+  };
+
+  const getCoordinates = (event) => {
+    if (!canvasRef.current) return { offsetX: 0, offsetY: 0 };
+    
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    if (event.touches && event.touches[0]) {
+      const touch = event.touches[0];
+      return {
+        offsetX: (touch.clientX - rect.left) * scaleX,
+        offsetY: (touch.clientY - rect.top) * scaleY
+      };
+    }
+    
+    return {
+      offsetX: event.nativeEvent.offsetX * scaleX,
+      offsetY: event.nativeEvent.offsetY * scaleY
+    };
   };
 
   const startDrawing = (event) => {
     event.preventDefault();
     const { offsetX, offsetY } = getCoordinates(event);
-    contextRef.current.beginPath();
-    contextRef.current.moveTo(offsetX, offsetY);
-    setIsDrawing(true);
-  };
-
-  const finishDrawing = () => {
-    contextRef.current.closePath();
-    setIsDrawing(false);
+    if (contextRef.current) {
+      contextRef.current.beginPath();
+      contextRef.current.moveTo(offsetX, offsetY);
+      lastPoint.current = { x: offsetX, y: offsetY };
+      setIsDrawing(true);
+    }
   };
 
   const draw = (event) => {
     event.preventDefault();
-    if (!isDrawing) return;
+    if (!isDrawing || !contextRef.current) return;
+
     const { offsetX, offsetY } = getCoordinates(event);
-    contextRef.current.lineTo(offsetX, offsetY);
-    contextRef.current.stroke();
+    const context = contextRef.current;
+
+    context.beginPath();
+    context.moveTo(lastPoint.current.x, lastPoint.current.y);
+    smoothLine(context, lastPoint.current.x, lastPoint.current.y, offsetX, offsetY);
+    context.stroke();
+
+    lastPoint.current = { x: offsetX, y: offsetY };
   };
 
-  const getCoordinates = (event) => {
-    if (!canvasRef.current) return { offsetX: 0, offsetY: 0 };
-
-    if (event.touches) {
-      const rect = canvasRef.current.getBoundingClientRect();
-      return {
-        offsetX: event.touches[0].clientX - rect.left,
-        offsetY: event.touches[0].clientY - rect.top
-      };
-    }
-    return {
-      offsetX: event.nativeEvent.offsetX,
-      offsetY: event.nativeEvent.offsetY
-    };
-  };
-  const clearCanvas = () => {
+  const finishDrawing = () => {
     if (contextRef.current) {
-      drawCourt();
+      contextRef.current.closePath();
+      saveCanvasState();
+    }
+    setIsDrawing(false);
+  };
+
+  const clearCanvas = () => {
+    if (window.confirm('¿Estás seguro de que deseas limpiar el dibujo?')) {
+      if (contextRef.current) {
+        drawCourt();
+        saveCanvasState();
+      }
+    }
+  };
+
+  const saveCanvasState = () => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const imageData = canvas.toDataURL('image/png');
+      setTrendsData(prev => ({
+        ...prev,
+        teamName,
+        canvasImage: imageData
+      }));
     }
   };
 
@@ -228,6 +263,7 @@ const VolleyballTrends = () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
 
+      saveCanvasState();
       const imageData = canvas.toDataURL('image/png');
       
       const pdf = new jsPDF({
@@ -236,25 +272,20 @@ const VolleyballTrends = () => {
         format: 'a4'
       });
 
-      // Agregar título
       pdf.setFontSize(16);
       pdf.setTextColor(0, 0, 255);
       pdf.text('Análisis de Tendencias - Voleibol de Playa', 15, 15);
 
-      // Agregar información del equipo
       pdf.setFontSize(12);
       pdf.setTextColor(0, 0, 0);
       pdf.text(`Equipo: ${teamName}`, 15, 25);
       pdf.text(`Fecha: ${format(new Date(), "PPP", { locale: es })}`, 15, 32);
 
-      // Calcular dimensiones para mantener la proporción
       const imgWidth = 270;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-      // Agregar la imagen
       pdf.addImage(imageData, 'PNG', 15, 40, imgWidth, imgHeight);
 
-      // Descargar PDF
       pdf.save(`tendencias-${teamName.replace(/\s+/g, '-')}-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
     } catch (error) {
       console.error('Error al generar el PDF:', error);
@@ -263,10 +294,10 @@ const VolleyballTrends = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-400 to-blue-600 p-2 md:p-4">
+    <div className="min-h-screen bg-gradient-to-b from-blue-400 to-blue-600 p-2 sm:p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
-        <div className="bg-white bg-opacity-90 rounded-lg shadow-lg p-2 md:p-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4 mb-2 md:mb-4">
+        <div className="bg-white bg-opacity-90 rounded-lg shadow-lg p-3 sm:p-4 md:p-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 mb-4">
             <div className="flex items-center">
               <button
                 type="button"
@@ -279,10 +310,9 @@ const VolleyballTrends = () => {
             </div>
 
             <div className="text-center">
-              <h1 className="text-xl md:text-2xl font-bold text-red-600">
-                Tendencias de Juego - Voleibol de Playa
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-600">
+                Tendencias de Juego
               </h1>
-    
             </div>
 
             <div className="flex justify-end items-center space-x-2">
@@ -291,7 +321,7 @@ const VolleyballTrends = () => {
                 value={teamName}
                 onChange={(e) => setTeamName(e.target.value)}
                 placeholder="Nombre del equipo"
-                className="px-3 py-2 border rounded-md flex-grow"
+                className="flex-grow px-3 py-2 border rounded-md"
               />
               <button
                 type="button"
@@ -309,65 +339,98 @@ const VolleyballTrends = () => {
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2 mb-2 md:mb-4 p-2 bg-white bg-opacity-50 rounded-md">
-            <select
-              value={color}
-              onChange={(e) => {
-                setColor(e.target.value);
-                if (contextRef.current) {
-                  contextRef.current.strokeStyle = e.target.value;
-                }
-              }}
-              className="px-3 py-2 border rounded-md"
-            >
-              <option value="#ff0000">Rojo</option>
-              <option value="#0000ff">Azul</option>
-              <option value="#000000">Negro</option>
-              <option value="#ffff00">Amarillo</option>
-              <option value="#ffffff">Blanco</option>
-            </select>
-            <select
-              value={lineWidth}
-              onChange={(e) => {
-                const newWidth = Number(e.target.value);
-                setLineWidth(newWidth);
-                if (contextRef.current) {
-                  contextRef.current.lineWidth = newWidth;
-                }
-              }}
-              className="px-3 py-2 border rounded-md"
-            >
-              <option value="2">Muy delgada</option>
-              <option value="3">Delgada</option>
-              <option value="5">Media</option>
-              <option value="8">Gruesa</option>
-            </select>
+          <div className="flex flex-wrap gap-2 mb-4 p-2 bg-white bg-opacity-50 rounded-md">
+            <div className="flex flex-wrap gap-2">
+              {colorOptions.map((colorOption) => (
+                <button
+                  key={colorOption.value}
+                  onClick={() => {
+                    setColor(colorOption.value);
+                    if (contextRef.current) {
+                      contextRef.current.strokeStyle = colorOption.value;
+                    }
+                  }}
+                  className={`w-8 h-8 rounded-full shadow-sm ${
+                    color === colorOption.value ? 'ring-2 ring-blue-500' : ''
+                  } ${colorOption.class} hover:opacity-80 transition-opacity`}
+                  title={colorOption.label}
+                />
+              ))}
+            </div>
+            <div className="flex gap-2">
+              {lineWidthOptions.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => {
+                    setLineWidth(option.value);
+                    if (contextRef.current) {
+                      contextRef.current.lineWidth = option.value;
+                    }
+                  }}
+                  className={`px-3 py-2 rounded-md border ${
+                    lineWidth === option.value
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-300 hover:bg-gray-50'
+                  }`}
+                  title={option.label}
+                >
+                  <div 
+                    className="w-6 bg-current rounded-full mx-auto"
+                    style={{ height: `${option.value}px` }}
+                  />
+                </button>
+              ))}
+            </div>
             <button
               type="button"
               onClick={clearCanvas}
-              className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
+              className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors ml-auto"
             >
               Limpiar
             </button>
           </div>
           
-          <div className="flex justify-center bg-white bg-opacity-50 p-2 md:p-4 rounded-lg shadow-inner">
-            <canvas
-              ref={canvasRef}
-              onMouseDown={startDrawing}
-              onMouseUp={finishDrawing}
-              onMouseMove={draw}
-              onMouseLeave={finishDrawing}
-              onTouchStart={startDrawing}
-              onTouchEnd={finishDrawing}
-              onTouchMove={draw}
-              className="border border-gray-300 rounded-lg touch-none"
-              style={{ 
-                maxWidth: '100%',
-                height: isMobile ? '70vh' : '50vh'
-              }}
-            />
+          <div className="flex justify-center bg-white bg-opacity-50 p-2 sm:p-4 rounded-lg shadow-inner">
+            <div style={{ 
+              position: 'relative', 
+              width: '100%',
+              touchAction: 'none'
+            }}>
+              <canvas
+                ref={canvasRef}
+                onMouseDown={startDrawing}
+                onMouseUp={finishDrawing}
+                onMouseMove={draw}
+                onMouseLeave={finishDrawing}
+                onTouchStart={startDrawing}
+                onTouchEnd={finishDrawing}
+                onTouchMove={draw}
+                className="border border-gray-300 rounded-lg touch-none"
+                style={{ 
+                  maxWidth: '100%',
+                  height: isMobile ? '70vh' : '50vh',
+                  touchAction: 'none',
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                  msUserSelect: 'none',
+                  MozUserSelect: 'none',
+                }}
+              />
+            </div>
           </div>
+
+          {/* Guía de uso */}
+          <div className="mt-4 p-4 bg-blue-50 rounded-lg text-sm">
+            <h3 className="font-semibold text-blue-800 mb-2">Guía de uso:</h3>
+            <ul className="space-y-1 text-blue-600">
+              <li>• Use los botones de colores para seleccionar el color del trazo</li>
+              <li>• Seleccione el grosor de línea deseado</li>
+              <li>• Dibuje sobre la cancha usando el mouse o el dedo en dispositivos táctiles</li>
+              <li>• Use el botón "Limpiar" para borrar todo el dibujo</li>
+              <li>• Ingrese el nombre del equipo para habilitar la descarga del PDF</li>
+            </ul>
+          </div>
+
         </div>
       </div>
     </div>
