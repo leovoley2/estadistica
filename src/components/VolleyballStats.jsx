@@ -10,16 +10,25 @@ import { useVolleyball } from '../context/VolleyballContext';
 import { useDeviceSize } from '../hooks/useDeviceSize';
 import { setupHighDPI } from '../utils/canvas-utils';
 
-const HEATMAP_COLORS = [
-  'rgba(0, 255, 0, 0.3)',
-  'rgba(255, 255, 0, 0.4)',
-  'rgba(255, 165, 0, 0.5)',
-  'rgba(255, 0, 0, 0.6)'
-];
+const HEATMAP_COLORS = {
+  red: [
+    'rgba(255, 0, 0, 0.3)',
+    'rgba(255, 0, 0, 0.4)',
+    'rgba(255, 0, 0, 0.5)',
+    'rgba(255, 0, 0, 0.6)'
+  ],
+  blue: [
+    'rgba(0, 0, 255, 0.3)',
+    'rgba(0, 0, 255, 0.4)',
+    'rgba(0, 0, 255, 0.5)',
+    'rgba(0, 0, 255, 0.6)'
+  ]
+};
 
-const getHeatMapColor = (intensity) => {
-  const index = Math.min(Math.floor(intensity * HEATMAP_COLORS.length), HEATMAP_COLORS.length - 1);
-  return HEATMAP_COLORS[index];
+const getHeatMapColor = (intensity, colorType) => {
+  const colors = HEATMAP_COLORS[colorType];
+  const index = Math.min(Math.floor(intensity * colors.length), colors.length - 1);
+  return colors[index];
 };
 
 const VolleyballStats = () => {
@@ -29,6 +38,7 @@ const VolleyballStats = () => {
   const canvasRef = useRef(null);
   const chartRef = useRef(null);
   const [heatmap, setHeatmap] = useState(new Map());
+  const [heatmapColor, setHeatmapColor] = useState('red');
   const [date, setDate] = useState(statsData.date || '');
   const [name, setName] = useState(statsData.name || '');
   const [selectedSkill, setSelectedSkill] = useState(statsData.selectedSkill || '');
@@ -48,8 +58,17 @@ const VolleyballStats = () => {
 
     const handleResize = () => {
       const container = canvas.parentElement;
-      canvas.width = container.clientWidth;
-      canvas.height = container.clientHeight;
+      if (deviceSize.isMobile) {
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientWidth * 1.5;
+      } else if (deviceSize.isTablet) {
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientWidth * 0.6;
+      } else {
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientWidth * 0.5625;
+      }
+      
       setupHighDPI(canvas, canvas.getContext('2d'));
       drawCourt();
     };
@@ -57,19 +76,20 @@ const VolleyballStats = () => {
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [deviceSize, heatmap]);
+  }, [deviceSize, heatmap, heatmapColor]);
 
   const drawCourt = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const context = canvas.getContext('2d');
+    const isMobile = deviceSize.isMobile;
     
-    const baseWidth = Math.min(canvas.width * 0.9, 800);
-    const baseHeight = baseWidth * (9/16);
+    const courtWidth = isMobile ? canvas.width * 0.8 : canvas.width * 0.85;
+    const courtHeight = isMobile ? canvas.height * 0.85 : canvas.height * 0.8;
     
-    const startX = (canvas.width - baseWidth) / 2;
-    const startY = (canvas.height - baseHeight) / 2;
+    const startX = (canvas.width - courtWidth) / 2;
+    const startY = (canvas.height - courtHeight) / 2;
 
     context.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -86,38 +106,54 @@ const VolleyballStats = () => {
       }
     }
 
-    const courtWidth = baseWidth * 0.8;
-    const courtHeight = baseHeight * 0.8;
-    const courtStartX = startX + (baseWidth - courtWidth) / 2;
-    const courtStartY = startY + (baseHeight - courtHeight) / 2;
-
     context.strokeStyle = '#000080';
     context.lineWidth = Math.max(2, canvas.width * 0.004);
-    context.strokeRect(courtStartX, courtStartY, courtWidth, courtHeight);
+    context.strokeRect(startX, startY, courtWidth, courtHeight);
 
-    if (deviceSize.isMobile) {
-      const netY = courtStartY + courtHeight/2;
+    // Dibujar red según orientación
+    if (isMobile) {
+      const netY = startY + courtHeight / 2;
+      context.beginPath();
       context.strokeStyle = '#666666';
       context.lineWidth = Math.max(3, canvas.width * 0.006);
-      context.beginPath();
-      context.moveTo(courtStartX - 10, netY);
-      context.lineTo(courtStartX + courtWidth + 10, netY);
+      context.moveTo(startX - 10, netY);
+      context.lineTo(startX + courtWidth + 10, netY);
       context.stroke();
+
+      // Detalles de la red vertical
+      context.lineWidth = 1;
+      for (let x = startX; x < startX + courtWidth; x += 15) {
+        context.beginPath();
+        context.moveTo(x, netY - 3);
+        context.lineTo(x, netY + 3);
+        context.stroke();
+      }
     } else {
-      const netX = courtStartX + courtWidth/2;
+      const netX = startX + courtWidth / 2;
+      context.beginPath();
       context.strokeStyle = '#666666';
       context.lineWidth = Math.max(3, canvas.width * 0.006);
-      context.beginPath();
-      context.moveTo(netX, courtStartY - 10);
-      context.lineTo(netX, courtStartY + courtHeight + 10);
+      context.moveTo(netX, startY - 10);
+      context.lineTo(netX, startY + courtHeight + 10);
       context.stroke();
+
+      // Detalles de la red horizontal
+      context.lineWidth = 1;
+      for (let y = startY; y < startY + courtHeight; y += 15) {
+        context.beginPath();
+        context.moveTo(netX - 3, y);
+        context.lineTo(netX + 3, y);
+        context.stroke();
+      }
     }
 
+    // Dibujar mapa de calor
     heatmap.forEach((value, key) => {
       const [x, y] = key.split(',').map(Number);
       const radius = Math.min(30, canvas.width * 0.05);
       const heatGradient = context.createRadialGradient(x, y, 0, x, y, radius);
-      heatGradient.addColorStop(0, getHeatMapColor(value));
+      // Usamos el color guardado para cada punto
+      heatGradient.addColorStop(0, getHeatMapColor(value.intensity, value.color));
       heatGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
       context.fillStyle = heatGradient;
       context.beginPath();
@@ -125,21 +161,26 @@ const VolleyballStats = () => {
       context.fill();
     });
   };
-
   const handleCanvasClick = (event) => {
     event.preventDefault();
     const canvas = canvasRef.current;
     if (!canvas) return;
-
+  
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
     const x = ((event.touches ? event.touches[0].clientX : event.clientX) - rect.left) * scaleX;
     const y = ((event.touches ? event.touches[0].clientY : event.clientY) - rect.top) * scaleY;
-
+  
     const key = `${x},${y}`;
     const newHeatmap = new Map(heatmap);
-    newHeatmap.set(key, Math.min((heatmap.get(key) || 0) + 0.25, 1));
+    const currentValue = heatmap.get(key);
+    
+    newHeatmap.set(key, {
+      intensity: Math.min((currentValue?.intensity || 0) + 0.25, 1),
+      color: heatmapColor // Guardamos el color actual
+    });
+    
     setHeatmap(newHeatmap);
     drawCourt();
   };
@@ -184,42 +225,109 @@ const VolleyballStats = () => {
       alert('Por favor, complete todos los campos antes de descargar el PDF');
       return;
     }
-
+  
     try {
-      const canvas = canvasRef.current;
-      const doc = new jsPDF(deviceSize.isMobile ? 'p' : 'l', 'mm', 'a4');
-      
-      doc.setFontSize(16);
-      doc.text('Estadísticas de Voleibol de Playa', 15, 15);
-      
-      doc.setFontSize(12);
-      doc.text(`Fecha: ${date}`, 15, 25);
-      doc.text(`Nombre/Equipo: ${name}`, 15, 32);
-      doc.text(`Fundamento: ${selectedSkill}`, 15, 39);
-
-      doc.text('Estadísticas:', 15, 50);
-      doc.text(`Total de Acciones: ${calculateTotalActions()}`, 20, 57);
-      Object.entries(stats).forEach(([key, value], index) => {
-        doc.text(`${key}: ${value}`, 20, 64 + (index * 7));
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
       });
-      doc.text(`Eficiencia: ${calculateEfficiency()}%`, 20, 99);
-      doc.text(`Eficacia: ${calculateEffectiveness()}%`, 20, 106);
-
-      if (canvas) {
-        const canvasImage = canvas.toDataURL('image/png');
-        const aspectRatio = canvas.height / canvas.width;
-        const imgWidth = doc.internal.pageSize.getWidth() * 0.4;
-        const imgHeight = imgWidth * aspectRatio;
-        doc.addImage(canvasImage, 'PNG', 100, 20, imgWidth, imgHeight);
-      }
-
+      
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      
+      // Título
+      doc.setFontSize(24);
+      doc.setTextColor(0, 0, 255);
+      doc.text('Estadísticas de Voleibol de Playa', pageWidth/2, 20, { align: 'center' });
+      
+      // División del espacio: Lado izquierdo para estadísticas y gráfico, lado derecho para la cancha
+      const leftWidth = pageWidth * 0.5;
+      
+      // Información básica
+      doc.setFontSize(12);
+      doc.setTextColor(0, 0, 0);
+      doc.text([
+        `Fecha: ${format(new Date(date), "PPP", { locale: es })}`,
+        `Nombre/Equipo: ${name}`,
+        `Fundamento: ${selectedSkill}`
+      ], 20, 35);
+  
+      // Estadísticas
+      doc.setFontSize(14);
+      doc.text('Estadísticas:', 20, 55);
+      doc.setFontSize(12);
+      
+      const stats_text = [
+        `Total de Acciones: ${calculateTotalActions()}`,
+        `Doble Positivo (##): ${stats.doublePositive}`,
+        `Positivo (+): ${stats.positive}`,
+        `Regular (!): ${stats.regular}`,
+        `Negativo (-): ${stats.negative}`,
+        `Doble Negativo (=): ${stats.doubleNegative}`,
+        '',
+        `Eficiencia: ${calculateEfficiency()}%`,
+        `Eficacia: ${calculateEffectiveness()}%`
+      ];
+      
+      doc.text(stats_text, 20, 65);
+  
+      // Gráfico de barras
       const chartDiv = chartRef.current;
       if (chartDiv) {
         const chartImage = await html2canvas(chartDiv);
         const chartData = chartImage.toDataURL('image/png');
-        doc.addImage(chartData, 'PNG', 15, 120, 80, 40);
+        doc.addImage(chartData, 'PNG', 20, 120, leftWidth - 30, 60);
       }
-
+  
+      // Cancha con mapa de calor - mantener proporción cuadrada
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const canvasImage = canvas.toDataURL('image/png');
+        const maxHeight = pageHeight - 40; // Margen superior e inferior
+        const maxWidth = (pageWidth - leftWidth) - 30; // Ancho disponible menos margen
+        const size = Math.min(maxHeight, maxWidth); // Usar el menor valor para mantener proporción
+  
+        // Calcular posición para centrar verticalmente
+        const yPos = (pageHeight - size) / 2;
+        doc.addImage(
+          canvasImage, 
+          'PNG', 
+          leftWidth + 10, // X: justo después de la sección izquierda
+          yPos, // Y: centrado verticalmente
+          size, // Ancho: cuadrado
+          size // Alto: igual al ancho para mantener proporción
+        );
+      }
+  
+      // Leyenda de colores en la parte inferior
+      doc.setFontSize(10);
+      doc.text('Leyenda de colores:', 20, pageHeight - 25);
+      
+      const colors = [
+        { label: 'Doble Positivo (##)', color: '#22c55e' },
+        { label: 'Positivo (+)', color: '#3b82f6' },
+        { label: 'Regular (!)', color: '#f59e0b' },
+        { label: 'Negativo (-)', color: '#ef4444' },
+        { label: 'Doble Negativo (=)', color: '#7f1d1d' }
+      ];
+  
+      let xOffset = 20;
+      colors.forEach((item) => {
+        doc.setFillColor(item.color);
+        doc.rect(xOffset, pageHeight - 20, 5, 5, 'F');
+        doc.text(item.label, xOffset + 7, pageHeight - 16);
+        xOffset += 50;
+      });
+  
+      // Pie de página
+      doc.setFontSize(8);
+      doc.text(
+        `Generado el ${format(new Date(), "PPP 'a las' HH:mm", { locale: es })}`, 
+        pageWidth - 60, 
+        pageHeight - 5
+      );
+  
       doc.save(`estadisticas-${name}-${date}.pdf`);
     } catch (error) {
       console.error('Error al generar el PDF:', error);
@@ -234,7 +342,6 @@ const VolleyballStats = () => {
           <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-center mb-4 sm:mb-6 md:mb-8 text-blue-600">
             Estadísticas de Voleibol de Playa
           </h1>
-
           <form onSubmit={(e) => e.preventDefault()} className="space-y-4 sm:space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
@@ -315,20 +422,47 @@ const VolleyballStats = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="aspect-[16/9] w-full mx-auto">
+              <div>
+                {/* Selector de color para el mapa de calor */}
+                <div className="flex items-center space-x-4 mb-4">
+                  <span className="text-sm font-medium">Color del mapa de calor:</span>
+                  <div className="flex space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => setHeatmapColor('red')}
+                      className={`w-8 h-8 rounded-full ${
+                        heatmapColor === 'red' 
+                          ? 'ring-2 ring-offset-2 ring-red-500' 
+                          : ''
+                      } bg-red-500`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setHeatmapColor('blue')}
+                      className={`w-8 h-8 rounded-full ${
+                        heatmapColor === 'blue' 
+                          ? 'ring-2 ring-offset-2 ring-blue-500' 
+                          : ''
+                      } bg-blue-500`}
+                    />
+                  </div>
+                </div>
+
+                <div className={`aspect-${deviceSize.isMobile ? '[2/3]' : '[16/9]'} w-full`}>
                   <canvas
-                  ref={canvasRef}
-                  onClick={handleCanvasClick}
-                  onTouchStart={handleCanvasClick}
-                  className="w-full h-full border border-gray-300 rounded-lg touch-none"
-                  style={{ touchAction: 'none' }}
-                />
+                    ref={canvasRef}
+                    onClick={handleCanvasClick}
+                    onTouchStart={handleCanvasClick}
+                    className="w-full h-full border border-gray-300 rounded-lg touch-none"
+                    style={{ touchAction: 'none' }}
+                  />
+                </div>
               </div>
 
               <div ref={chartRef} className="bg-white p-4 rounded-lg">
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={[
-                    { name: '#', value: stats.doublePositive, color: '#22c55e' },
+                    { name: '##', value: stats.doublePositive, color: '#22c55e' },
                     { name: '+', value: stats.positive, color: '#3b82f6' },
                     { name: '!', value: stats.regular, color: '#f59e0b' },
                     { name: '-', value: stats.negative, color: '#ef4444' },
