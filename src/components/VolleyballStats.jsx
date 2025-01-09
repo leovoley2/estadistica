@@ -58,16 +58,27 @@ const VolleyballStats = () => {
 
     const handleResize = () => {
       const container = canvas.parentElement;
-      if (deviceSize.isMobile) {
-        canvas.width = container.clientWidth;
-        canvas.height = container.clientWidth * 1.5;
-      } else if (deviceSize.isTablet) {
-        canvas.width = container.clientWidth;
-        canvas.height = container.clientWidth * 0.6;
+      const isMobile = window.innerWidth < 768;
+      const isTablet = window.innerWidth >= 768 && window.innerWidth < 1024;
+      
+      let canvasWidth, canvasHeight;
+
+      if (isMobile) {
+        // En móvil, hacemos la cancha más alta que ancha
+        canvasWidth = container.clientWidth;
+        canvasHeight = canvasWidth * 1.5; // Proporción 2:3 para móvil
+      } else if (isTablet) {
+        // En tablet, mantenemos una proporción más cuadrada
+        canvasWidth = Math.min(container.clientWidth, container.clientHeight * 1.2);
+        canvasHeight = canvasWidth * 0.8; // Proporción 4:5 para tablet
       } else {
-        canvas.width = container.clientWidth;
-        canvas.height = container.clientWidth * 0.5625;
+        // En desktop, mantenemos una proporción más horizontal
+        canvasWidth = container.clientWidth;
+        canvasHeight = canvasWidth * 0.6; // Proporción 5:3 para desktop
       }
+
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
       
       setupHighDPI(canvas, canvas.getContext('2d'));
       drawCourt();
@@ -83,84 +94,109 @@ const VolleyballStats = () => {
     if (!canvas) return;
 
     const context = canvas.getContext('2d');
-    const isMobile = deviceSize.isMobile;
+    const isMobile = window.innerWidth < 768;
     
-    const courtWidth = isMobile ? canvas.width * 0.8 : canvas.width * 0.85;
-    const courtHeight = isMobile ? canvas.height * 0.85 : canvas.height * 0.8;
+    // Calculamos las dimensiones de la cancha basadas en el tamaño del canvas
+    const padding = Math.max(10, canvas.width * 0.05); // Padding adaptativo
+    const courtWidth = canvas.width - (padding * 2);
+    const courtHeight = canvas.height - (padding * 2);
     
-    const startX = (canvas.width - courtWidth) / 2;
-    const startY = (canvas.height - courtHeight) / 2;
+    // Posición inicial de la cancha (centrada)
+    const startX = padding;
+    const startY = padding;
 
+    // Limpiamos el canvas
     context.clearRect(0, 0, canvas.width, canvas.height);
 
+    // Fondo de la cancha
     const gradient = context.createLinearGradient(0, 0, 0, canvas.height);
     gradient.addColorStop(0, '#f4d03f');
     gradient.addColorStop(1, '#f4c778');
     context.fillStyle = gradient;
     context.fillRect(0, 0, canvas.width, canvas.height);
 
+    // Textura de la arena
     context.fillStyle = '#e6c88e';
-    for (let i = 0; i < canvas.width; i += 4) {
-      for (let j = 0; j < canvas.height; j += 4) {
-        if (Math.random() > 0.5) context.fillRect(i, j, 2, 2);
+    const grainSize = Math.max(1, Math.floor(canvas.width / 200));
+    for (let i = 0; i < canvas.width; i += grainSize * 2) {
+      for (let j = 0; j < canvas.height; j += grainSize * 2) {
+        if (Math.random() > 0.5) {
+          context.fillRect(i, j, grainSize, grainSize);
+        }
       }
     }
 
+    // Borde de la cancha
     context.strokeStyle = '#000080';
     context.lineWidth = Math.max(2, canvas.width * 0.004);
     context.strokeRect(startX, startY, courtWidth, courtHeight);
 
-    // Dibujar red según orientación
+    // Red
     if (isMobile) {
+      // Red horizontal para móvil
       const netY = startY + courtHeight / 2;
+      const netWidth = courtWidth + padding;
+      const netX = startX - padding/2;
+      
       context.beginPath();
       context.strokeStyle = '#666666';
-      context.lineWidth = Math.max(3, canvas.width * 0.006);
-      context.moveTo(startX - 10, netY);
-      context.lineTo(startX + courtWidth + 10, netY);
+      context.lineWidth = Math.max(2, canvas.width * 0.006);
+      context.moveTo(netX, netY);
+      context.lineTo(netX + netWidth, netY);
       context.stroke();
 
-      // Detalles de la red vertical
-      context.lineWidth = 1;
-      for (let x = startX; x < startX + courtWidth; x += 15) {
+      // Detalles de la red
+      const netSpacing = Math.max(8, courtWidth / 30);
+      context.lineWidth = Math.max(1, canvas.width * 0.002);
+      for (let x = netX; x <= netX + netWidth; x += netSpacing) {
         context.beginPath();
-        context.moveTo(x, netY - 3);
-        context.lineTo(x, netY + 3);
+        context.moveTo(x, netY - 4);
+        context.lineTo(x, netY + 4);
         context.stroke();
       }
     } else {
+      // Red vertical para tablet/desktop
       const netX = startX + courtWidth / 2;
+      const netHeight = courtHeight + padding;
+      const netY = startY - padding/2;
+      
       context.beginPath();
       context.strokeStyle = '#666666';
-      context.lineWidth = Math.max(3, canvas.width * 0.006);
-      context.moveTo(netX, startY - 10);
-      context.lineTo(netX, startY + courtHeight + 10);
+      context.lineWidth = Math.max(2, canvas.width * 0.006);
+      context.moveTo(netX, netY);
+      context.lineTo(netX, netY + netHeight);
       context.stroke();
 
-      // Detalles de la red horizontal
-      context.lineWidth = 1;
-      for (let y = startY; y < startY + courtHeight; y += 15) {
+      // Detalles de la red
+      const netSpacing = Math.max(8, courtHeight / 30);
+      context.lineWidth = Math.max(1, canvas.width * 0.002);
+      for (let y = netY; y <= netY + netHeight; y += netSpacing) {
         context.beginPath();
-        context.moveTo(netX - 3, y);
-        context.lineTo(netX + 3, y);
+        context.moveTo(netX - 4, y);
+        context.lineTo(netX + 4, y);
         context.stroke();
       }
     }
 
-    // Dibujar mapa de calor
+    // Dibujar el mapa de calor
     heatmap.forEach((value, key) => {
       const [x, y] = key.split(',').map(Number);
-      const radius = Math.min(30, canvas.width * 0.05);
+      const radius = Math.min(
+        30,
+        Math.max(15, canvas.width * 0.03)
+      );
+      
       const heatGradient = context.createRadialGradient(x, y, 0, x, y, radius);
-      // Usamos el color guardado para cada punto
       heatGradient.addColorStop(0, getHeatMapColor(value.intensity, value.color));
       heatGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      
       context.fillStyle = heatGradient;
       context.beginPath();
       context.arc(x, y, radius, 0, Math.PI * 2);
       context.fill();
     });
   };
+
   const handleCanvasClick = (event) => {
     event.preventDefault();
     const canvas = canvasRef.current;
@@ -178,7 +214,7 @@ const VolleyballStats = () => {
     
     newHeatmap.set(key, {
       intensity: Math.min((currentValue?.intensity || 0) + 0.25, 1),
-      color: heatmapColor // Guardamos el color actual
+      color: heatmapColor
     });
     
     setHeatmap(newHeatmap);
@@ -280,29 +316,20 @@ const VolleyballStats = () => {
         doc.addImage(chartData, 'PNG', 20, 120, leftWidth - 30, 60);
       }
   
-      // Cancha con mapa de calor - mantener proporción cuadrada
+      // Cancha con mapa de calor
       const canvas = canvasRef.current;
       if (canvas) {
         const canvasImage = canvas.toDataURL('image/png');
-        const maxHeight = pageHeight - 40; // Margen superior e inferior
-        const maxWidth = (pageWidth - leftWidth) - 30; // Ancho disponible menos margen
-        const size = Math.min(maxHeight, maxWidth); // Usar el menor valor para mantener proporción
-  
-        // Calcular posición para centrar verticalmente
+        const maxHeight = pageHeight - 40;
+        const maxWidth = (pageWidth - leftWidth) - 30;
+        const size = Math.min(maxHeight, maxWidth);
         const yPos = (pageHeight - size) / 2;
-        doc.addImage(
-          canvasImage, 
-          'PNG', 
-          leftWidth + 10, // X: justo después de la sección izquierda
-          yPos, // Y: centrado verticalmente
-          size, // Ancho: cuadrado
-          size // Alto: igual al ancho para mantener proporción
-        );
+        doc.addImage(canvasImage, 'PNG', leftWidth + 10, yPos, size, size);
       }
   
-      // Leyenda de colores en la parte inferior
+      // Leyenda de colores
       doc.setFontSize(10);
-      doc.text('Leyenda de colores:', 20, pageHeight - 25);
+      doc.text('Leyenda:', 20, pageHeight - 20);
       
       const colors = [
         { label: 'Doble Positivo (##)', color: '#22c55e' },
@@ -311,55 +338,21 @@ const VolleyballStats = () => {
         { label: 'Negativo (-)', color: '#ef4444' },
         { label: 'Doble Negativo (=)', color: '#7f1d1d' }
       ];
-  
+
       let xOffset = 20;
-      colors.forEach((item) => {
-        doc.setFillColor(item.color);
-        doc.rect(xOffset, pageHeight - 20, 5, 5, 'F');
-        doc.text(item.label, xOffset + 7, pageHeight - 16);
+      colors.forEach(({ label, color }) => {
+        doc.setFillColor(color);
+        doc.rect(xOffset, pageHeight - 15, 5, 5, 'F');
+        doc.text(label, xOffset + 8, pageHeight - 12);
         xOffset += 50;
       });
-  
-      // Pie de página
-      doc.setFontSize(8);
-      doc.text(
-        `Generado el ${format(new Date(), "PPP 'a las' HH:mm", { locale: es })}`, 
-        pageWidth - 60, 
-        pageHeight - 5
-      );
-  
+
       doc.save(`estadisticas-${name}-${date}.pdf`);
     } catch (error) {
       console.error('Error al generar el PDF:', error);
       alert('Error al generar el PDF. Por favor, intente nuevamente.');
     }
   };
-  // En el VolleyballStats.jsx, añade esta función después de las constantes iniciales
-const getCourtDimensions = () => {
-  const isMobile = window.innerWidth < 768;
-  const container = canvasRef.current?.parentElement;
-  
-  if (!container) return { width: 0, height: 0 };
-
-  if (isMobile) {
-    // En móviles, la cancha es vertical
-    const width = container.clientWidth * 0.9;
-    return {
-      width: width,
-      height: width * (4/3), // Proporción vertical 4:3
-      isMobile: true
-    };
-  } else {
-    // En desktop, la cancha es horizontal
-    const width = container.clientWidth * 0.9;
-    const height = width * (3/4); // Proporción horizontal 3:4
-    return {
-      width: width,
-      height: height,
-      isMobile: false
-    };
-  }
-};
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-400 to-blue-600 p-2 sm:p-4 md:p-6">
@@ -368,6 +361,7 @@ const getCourtDimensions = () => {
           <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-center mb-4 sm:mb-6 md:mb-8 text-blue-600">
             Estadísticas de Voleibol de Playa
           </h1>
+          
           <form onSubmit={(e) => e.preventDefault()} className="space-y-4 sm:space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
@@ -406,7 +400,7 @@ const getCourtDimensions = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-4">
               {[
                 { key: 'doublePositive', label: '## (Doble Positivo)', color: '#22c55e' },
                 { key: 'positive', label: '+ (Positivo)', color: '#3b82f6' },
@@ -414,21 +408,21 @@ const getCourtDimensions = () => {
                 { key: 'negative', label: '- (Negativo)', color: '#ef4444' },
                 { key: 'doubleNegative', label: '= (Doble Negativo)', color: '#7f1d1d' }
               ].map(({ key, label, color }) => (
-                <div key={key} className="flex flex-col items-center space-y-2 p-2 bg-gray-50 rounded-lg">
+                <div key={key} className="flex flex-col items-center space-y-1 p-1 sm:p-2 bg-gray-50 rounded-lg">
                   <span className="text-xs sm:text-sm font-medium text-center">{label}</span>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-1 sm:space-x-2">
                     <button
                       type="button"
                       onClick={() => setStats(prev => ({
                         ...prev,
                         [key]: Math.max(0, prev[key] - 1)
                       }))}
-                      className="p-1 sm:p-2 hover:bg-gray-100 rounded-full"
+                      className="p-1 hover:bg-gray-100 rounded-full"
                       style={{ color }}
                     >
-                      <ArrowDownCircle className="h-4 w-4 sm:h-6 sm:w-6" />
+                      <ArrowDownCircle className="h-4 w-4 sm:h-5 sm:w-5" />
                     </button>
-                    <span className="w-8 sm:w-12 text-center font-bold" style={{ color }}>
+                    <span className="w-6 sm:w-8 text-center font-bold text-sm sm:text-base" style={{ color }}>
                       {stats[key]}
                     </span>
                     <button
@@ -437,19 +431,18 @@ const getCourtDimensions = () => {
                         ...prev,
                         [key]: prev[key] + 1
                       }))}
-                      className="p-1 sm:p-2 hover:bg-gray-100 rounded-full"
+                      className="p-1 hover:bg-gray-100 rounded-full"
                       style={{ color }}
                     >
-                      <ArrowUpCircle className="h-4 w-4 sm:h-6 sm:w-6" />
+                      <ArrowUpCircle className="h-4 w-4 sm:h-5 sm:w-5" />
                     </button>
                   </div>
                 </div>
               ))}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div>
-                {/* Selector de color para el mapa de calor */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8">
+              <div className="w-full">
                 <div className="flex items-center space-x-4 mb-4">
                   <span className="text-sm font-medium">Color del mapa de calor:</span>
                   <div className="flex space-x-2">
@@ -474,19 +467,21 @@ const getCourtDimensions = () => {
                   </div>
                 </div>
 
-                <div className={`aspect-${deviceSize.isMobile ? '[2/3]' : '[16/9]'} w-full`}>
+                <div className="relative w-full h-auto aspect-[4/3] md:aspect-[16/9]">
                   <canvas
                     ref={canvasRef}
                     onClick={handleCanvasClick}
                     onTouchStart={handleCanvasClick}
                     className="w-full h-full border border-gray-300 rounded-lg touch-none"
-                    style={{ touchAction: 'none' }}
+                    style={{ 
+                      touchAction: 'none'
+                    }}
                   />
                 </div>
               </div>
 
-              <div ref={chartRef} className="bg-white p-4 rounded-lg">
-                <ResponsiveContainer width="100%" height={300}>
+              <div ref={chartRef} className="bg-white p-4 rounded-lg h-[300px] sm:h-[400px]">
+                <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={[
                     { name: '##', value: stats.doublePositive, color: '#22c55e' },
                     { name: '+', value: stats.positive, color: '#3b82f6' },
@@ -529,35 +524,35 @@ const getCourtDimensions = () => {
               </div>
             </div>
 
-            <div className="flex justify-end space-x-4">
+            <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4">
               <button
                 type="button"
                 onClick={handleReset}
-                className="flex items-center px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
+                className="flex items-center justify-center px-3 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors text-sm sm:text-base"
               >
-                <RotateCcw className="h-5 w-5 mr-2" />
-                Resetear
+                <RotateCcw className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2" />
+                <span>Resetear</span>
               </button>
               <button
                 type="button"
                 onClick={() => navigate('/tendencias')}
-                className="flex items-center px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
+                className="flex items-center justify-center px-3 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors text-sm sm:text-base"
               >
-                <TrendingUp className="h-5 w-5 mr-2" />
-                Tendencias
+                <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2" />
+                <span>Tendencias</span>
               </button>
               <button
                 type="button"
                 onClick={handleDownloadPDF}
                 disabled={!name || !date || !selectedSkill}
-                className={`flex items-center px-4 py-2 rounded-md transition-colors ${
+                className={`flex items-center justify-center px-3 py-2 rounded-md transition-colors text-sm sm:text-base ${
                   !name || !date || !selectedSkill
                     ? 'bg-gray-300 cursor-not-allowed'
                     : 'bg-blue-500 hover:bg-blue-600 text-white'
                 }`}
               >
-                <Download className="h-5 w-5 mr-2" />
-                Descargar PDF
+                <Download className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2" />
+                <span>Descargar PDF</span>
               </button>
             </div>
           </form>
