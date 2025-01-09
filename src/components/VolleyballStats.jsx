@@ -58,23 +58,16 @@ const VolleyballStats = () => {
 
     const handleResize = () => {
       const container = canvas.parentElement;
-      const isMobile = window.innerWidth < 768;
-      const isTablet = window.innerWidth >= 768 && window.innerWidth < 1024;
       
-      let canvasWidth, canvasHeight;
+      // Siempre mantenemos proporción vertical 2:3
+      let canvasWidth = container.clientWidth;
+      let canvasHeight = canvasWidth * 1.5;
 
-      if (isMobile) {
-        // En móvil, hacemos la cancha más alta que ancha
-        canvasWidth = container.clientWidth;
-        canvasHeight = canvasWidth * 1.5; // Proporción 2:3 para móvil
-      } else if (isTablet) {
-        // En tablet, mantenemos una proporción más cuadrada
-        canvasWidth = Math.min(container.clientWidth, container.clientHeight * 1.2);
-        canvasHeight = canvasWidth * 0.8; // Proporción 4:5 para tablet
-      } else {
-        // En desktop, mantenemos una proporción más horizontal
-        canvasWidth = container.clientWidth;
-        canvasHeight = canvasWidth * 0.6; // Proporción 5:3 para desktop
+      // Ajustamos altura máxima según el dispositivo
+      const maxHeight = window.innerHeight * 0.7; // 70% del viewport
+      if (canvasHeight > maxHeight) {
+        canvasHeight = maxHeight;
+        canvasWidth = canvasHeight / 1.5;
       }
 
       canvas.width = canvasWidth;
@@ -94,14 +87,12 @@ const VolleyballStats = () => {
     if (!canvas) return;
 
     const context = canvas.getContext('2d');
-    const isMobile = window.innerWidth < 768;
     
-    // Calculamos las dimensiones de la cancha basadas en el tamaño del canvas
-    const padding = Math.max(10, canvas.width * 0.05); // Padding adaptativo
+    // Calculamos las dimensiones de la cancha
+    const padding = Math.max(10, canvas.width * 0.05);
     const courtWidth = canvas.width - (padding * 2);
     const courtHeight = canvas.height - (padding * 2);
     
-    // Posición inicial de la cancha (centrada)
     const startX = padding;
     const startY = padding;
 
@@ -131,51 +122,26 @@ const VolleyballStats = () => {
     context.lineWidth = Math.max(2, canvas.width * 0.004);
     context.strokeRect(startX, startY, courtWidth, courtHeight);
 
-    // Red
-    if (isMobile) {
-      // Red horizontal para móvil
-      const netY = startY + courtHeight / 2;
-      const netWidth = courtWidth + padding;
-      const netX = startX - padding/2;
-      
-      context.beginPath();
-      context.strokeStyle = '#666666';
-      context.lineWidth = Math.max(2, canvas.width * 0.006);
-      context.moveTo(netX, netY);
-      context.lineTo(netX + netWidth, netY);
-      context.stroke();
+    // Red horizontal
+    const netY = startY + courtHeight / 2;
+    const netWidth = courtWidth + padding;
+    const netX = startX - padding/2;
+    
+    context.beginPath();
+    context.strokeStyle = '#666666';
+    context.lineWidth = Math.max(2, canvas.width * 0.006);
+    context.moveTo(netX, netY);
+    context.lineTo(netX + netWidth, netY);
+    context.stroke();
 
-      // Detalles de la red
-      const netSpacing = Math.max(8, courtWidth / 30);
-      context.lineWidth = Math.max(1, canvas.width * 0.002);
-      for (let x = netX; x <= netX + netWidth; x += netSpacing) {
-        context.beginPath();
-        context.moveTo(x, netY - 4);
-        context.lineTo(x, netY + 4);
-        context.stroke();
-      }
-    } else {
-      // Red vertical para tablet/desktop
-      const netX = startX + courtWidth / 2;
-      const netHeight = courtHeight + padding;
-      const netY = startY - padding/2;
-      
+    // Detalles de la red
+    const netSpacing = Math.max(8, courtWidth / 30);
+    context.lineWidth = Math.max(1, canvas.width * 0.002);
+    for (let x = netX; x <= netX + netWidth; x += netSpacing) {
       context.beginPath();
-      context.strokeStyle = '#666666';
-      context.lineWidth = Math.max(2, canvas.width * 0.006);
-      context.moveTo(netX, netY);
-      context.lineTo(netX, netY + netHeight);
+      context.moveTo(x, netY - 4);
+      context.lineTo(x, netY + 4);
       context.stroke();
-
-      // Detalles de la red
-      const netSpacing = Math.max(8, courtHeight / 30);
-      context.lineWidth = Math.max(1, canvas.width * 0.002);
-      for (let y = netY; y <= netY + netHeight; y += netSpacing) {
-        context.beginPath();
-        context.moveTo(netX - 4, y);
-        context.lineTo(netX + 4, y);
-        context.stroke();
-      }
     }
 
     // Dibujar el mapa de calor
@@ -277,9 +243,6 @@ const VolleyballStats = () => {
       doc.setTextColor(0, 0, 255);
       doc.text('Estadísticas de Voleibol de Playa', pageWidth/2, 20, { align: 'center' });
       
-      // División del espacio: Lado izquierdo para estadísticas y gráfico, lado derecho para la cancha
-      const leftWidth = pageWidth * 0.5;
-      
       // Información básica
       doc.setFontSize(12);
       doc.setTextColor(0, 0, 0);
@@ -313,40 +276,24 @@ const VolleyballStats = () => {
       if (chartDiv) {
         const chartImage = await html2canvas(chartDiv);
         const chartData = chartImage.toDataURL('image/png');
-        doc.addImage(chartData, 'PNG', 20, 120, leftWidth - 30, 60);
+        doc.addImage(chartData, 'PNG', 20, 120, pageWidth * 0.4, pageHeight * 0.3);
       }
   
       // Cancha con mapa de calor
       const canvas = canvasRef.current;
       if (canvas) {
         const canvasImage = canvas.toDataURL('image/png');
-        const maxHeight = pageHeight - 40;
-        const maxWidth = (pageWidth - leftWidth) - 30;
-        const size = Math.min(maxHeight, maxWidth);
-        const yPos = (pageHeight - size) / 2;
-        doc.addImage(canvasImage, 'PNG', leftWidth + 10, yPos, size, size);
+        const maxDimension = Math.min(pageWidth * 0.4, pageHeight * 0.6);
+        doc.addImage(
+          canvasImage,
+          'PNG',
+          pageWidth * 0.55,
+          pageHeight * 0.2,
+          maxDimension * 0.67, // Ajustado para proporción vertical
+          maxDimension
+        );
       }
   
-      // Leyenda de colores
-      doc.setFontSize(10);
-      doc.text('Leyenda:', 20, pageHeight - 20);
-      
-      const colors = [
-        { label: 'Doble Positivo (##)', color: '#22c55e' },
-        { label: 'Positivo (+)', color: '#3b82f6' },
-        { label: 'Regular (!)', color: '#f59e0b' },
-        { label: 'Negativo (-)', color: '#ef4444' },
-        { label: 'Doble Negativo (=)', color: '#7f1d1d' }
-      ];
-
-      let xOffset = 20;
-      colors.forEach(({ label, color }) => {
-        doc.setFillColor(color);
-        doc.rect(xOffset, pageHeight - 15, 5, 5, 'F');
-        doc.text(label, xOffset + 8, pageHeight - 12);
-        xOffset += 50;
-      });
-
       doc.save(`estadisticas-${name}-${date}.pdf`);
     } catch (error) {
       console.error('Error al generar el PDF:', error);
@@ -467,16 +414,19 @@ const VolleyballStats = () => {
                   </div>
                 </div>
 
-                <div className="relative w-full h-auto aspect-[4/3] md:aspect-[16/9]">
-                  <canvas
-                    ref={canvasRef}
-                    onClick={handleCanvasClick}
-                    onTouchStart={handleCanvasClick}
-                    className="w-full h-full border border-gray-300 rounded-lg touch-none"
-                    style={{ 
-                      touchAction: 'none'
-                    }}
-                  />
+                <div className="relative w-full overflow-hidden">
+                  <div className="w-full mx-auto" style={{ 
+                    paddingBottom: '150%',
+                    maxWidth: '500px'
+                  }}>
+                    <canvas
+                      ref={canvasRef}
+                      onClick={handleCanvasClick}
+                      onTouchStart={handleCanvasClick}
+                      className="absolute top-0 left-0 w-full h-full border border-gray-300 rounded-lg touch-none"
+                      style={{ touchAction: 'none' }}
+                    />
+                  </div>
                 </div>
               </div>
 
