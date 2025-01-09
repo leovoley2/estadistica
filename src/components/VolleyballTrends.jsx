@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, Download } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -6,168 +6,149 @@ import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useVolleyball } from '../context/VolleyballContext';
-import { setupHighDPI, smoothLine } from '../utils/canvas-utils';
 import { useDeviceSize } from '../hooks/useDeviceSize';
 
-const colorOptions = [
-  { value: '#ff0000', label: 'Rojo', class: 'bg-red-500' },
-  { value: '#0000ff', label: 'Azul', class: 'bg-blue-500' },
-  { value: '#000000', label: 'Negro', class: 'bg-black' },
-  { value: '#ffff00', label: 'Amarillo', class: 'bg-yellow-500' },
-  { value: '#ffffff', label: 'Blanco', class: 'bg-white border border-gray-300' },
-  { value: '#00ff00', label: 'Verde', class: 'bg-green-500' }
-];
+const HEATMAP_COLORS = {
+  red: [
+    'rgba(255, 0, 0, 0.3)',
+    'rgba(255, 0, 0, 0.4)',
+    'rgba(255, 0, 0, 0.5)',
+    'rgba(255, 0, 0, 0.6)'
+  ],
+  blue: [
+    'rgba(0, 0, 255, 0.3)',
+    'rgba(0, 0, 255, 0.4)',
+    'rgba(0, 0, 255, 0.5)',
+    'rgba(0, 0, 255, 0.6)'
+  ]
+};
 
-const lineWidthOptions = [
-  { value: 2, label: 'Muy delgada' },
-  { value: 3, label: 'Delgada' },
-  { value: 5, label: 'Media' },
-  { value: 8, label: 'Gruesa' }
-];
+const getHeatMapColor = (intensity, colorType) => {
+  const colors = HEATMAP_COLORS[colorType];
+  const index = Math.min(Math.floor(intensity * colors.length), colors.length - 1);
+  return colors[index];
+};
 
 const VolleyballTrends = () => {
   const navigate = useNavigate();
   const { trendsData, setTrendsData } = useVolleyball();
   const deviceSize = useDeviceSize();
   const canvasRef = useRef(null);
-  const contextRef = useRef(null);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [color, setColor] = useState('#ff0000');
-  const [lineWidth, setLineWidth] = useState(3);
+  const [heatmap, setHeatmap] = useState(new Map());
+  const [heatmapColor, setHeatmapColor] = useState('red');
   const [teamName, setTeamName] = useState(trendsData.teamName || '');
-  const lastPoint = useRef({ x: 0, y: 0 });
+
+  const getCourtDimensions = () => {
+    const isMobile = window.innerWidth < 768;
+    const container = canvasRef.current?.parentElement;
+    
+    if (!container) return { width: 0, height: 0 };
+
+    if (isMobile) {
+      const width = container.clientWidth * 0.9;
+      return {
+        width: width,
+        height: width * (4/3),
+        isMobile: true
+      };
+    } else {
+      const width = container.clientWidth * 0.9;
+      const height = width * (3/4);
+      return {
+        width: width,
+        height: height,
+        isMobile: false
+      };
+    }
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const handleResize = () => {
+      const { width, height } = getCourtDimensions();
+      canvas.width = width;
+      canvas.height = height;
       const context = canvas.getContext('2d');
-      if (deviceSize.isMobile) {
-        canvas.width = window.innerWidth * 0.95;
-        canvas.height = window.innerHeight * 0.6;
-      } else {
-        canvas.width = window.innerWidth * 0.85;
-        canvas.height = window.innerHeight * 0.5;
-      }
-      setupHighDPI(canvas, context);
-      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+      context.lineCap = 'round';
+      context.lineJoin = 'round';
       drawCourt();
-      context.putImageData(imageData, 0, 0);
     };
 
-    const context = canvas.getContext('2d', { willReadFrequently: true });
-    context.lineCap = 'round';
-    context.lineJoin = 'round';
-    context.strokeStyle = color;
-    context.lineWidth = lineWidth;
-    contextRef.current = context;
-
     handleResize();
-
-    if (trendsData.canvasImage) {
-      const img = new Image();
-      img.onload = () => {
-        context.drawImage(img, 0, 0);
-      };
-      img.src = trendsData.canvasImage;
-    } else {
-      drawCourt();
-    }
-
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [deviceSize, trendsData.canvasImage]);
+  }, [deviceSize, heatmap, heatmapColor]);
 
   const drawCourt = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const context = canvas.getContext('2d');
-    let courtWidth, courtHeight, startX, startY;
+    const { width, height, isMobile } = getCourtDimensions();
 
-    if (deviceSize.isMobile) {
-      courtWidth = canvas.width * 0.8;
-      courtHeight = canvas.height * 0.6;
-    } else {
-      courtWidth = canvas.width * 0.85;
-      courtHeight = canvas.height * 0.5;
-    }
+    // Limpiar canvas
+    context.clearRect(0, 0, width, height);
 
-    startX = (canvas.width - courtWidth) / 2;
-    startY = (canvas.height - courtHeight) / 2;
-
-    // Limpiar el canvas
-    context.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Fondo color arena con gradiente
-    const gradient = context.createLinearGradient(0, 0, 0, canvas.height);
+    // Color de fondo (arena)
+    const gradient = context.createLinearGradient(0, 0, 0, height);
     gradient.addColorStop(0, '#f4d03f');
     gradient.addColorStop(1, '#f4c778');
     context.fillStyle = gradient;
-    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillRect(0, 0, width, height);
 
-    // Textura de arena mejorada
+    // Textura de arena
     context.fillStyle = '#e6c88e';
-    for (let i = 0; i < canvas.width; i += 4) {
-      for (let j = 0; j < canvas.height; j += 4) {
+    for (let i = 0; i < width; i += 4) {
+      for (let j = 0; j < height; j += 4) {
         if (Math.random() > 0.5) {
           context.fillRect(i, j, 2, 2);
         }
       }
     }
 
-    // Sombra para la cancha
-    context.shadowColor = 'rgba(0, 0, 0, 0.2)';
-    context.shadowBlur = 10;
-    context.shadowOffsetX = 5;
-    context.shadowOffsetY = 5;
+    // Calcular dimensiones de la cancha
+    const margin = width * 0.1;
+    const courtWidth = width - (margin * 2);
+    const courtHeight = height - (margin * 2);
 
-    // Líneas de la cancha
+    // Dibujar cancha
     context.strokeStyle = '#000080';
-    context.lineWidth = deviceSize.isMobile ? 3 : 4;
+    context.lineWidth = Math.max(2, width * 0.004);
+    context.strokeRect(margin, margin, courtWidth, courtHeight);
 
-    // Rectángulo exterior
-    context.beginPath();
-    context.rect(startX, startY, courtWidth, courtHeight);
-    context.stroke();
+    // Dibujar red
+    context.strokeStyle = '#666666';
+    context.lineWidth = Math.max(3, width * 0.006);
 
-    // Red y detalles según orientación
-    if (deviceSize.isMobile) {
+    if (isMobile) {
       // Red horizontal para móviles
-      const netY = startY + courtHeight/2;
-      
+      const netY = height / 2;
       context.beginPath();
-      context.strokeStyle = '#666666';
-      context.lineWidth = 4;
-      
-      context.moveTo(startX - 10, netY);
-      context.lineTo(startX + courtWidth + 10, netY);
+      context.moveTo(margin - 5, netY);
+      context.lineTo(width - margin + 5, netY);
       context.stroke();
 
       // Detalles de la red
-      context.lineWidth = 1;
-      for (let x = startX; x < startX + courtWidth; x += 10) {
+      const netSpacing = courtWidth / 20;
+      for (let x = margin; x <= width - margin; x += netSpacing) {
         context.beginPath();
         context.moveTo(x, netY - 3);
         context.lineTo(x, netY + 3);
         context.stroke();
       }
     } else {
-      // Red vertical para tablet/desktop
-      const netX = startX + courtWidth/2;
-      
+      // Red vertical para desktop
+      const netX = width / 2;
       context.beginPath();
-      context.strokeStyle = '#666666';
-      context.lineWidth = 6;
-      
-      context.moveTo(netX, startY - 10);
-      context.lineTo(netX, startY + courtHeight + 10);
+      context.moveTo(netX, margin - 5);
+      context.lineTo(netX, height - margin + 5);
       context.stroke();
 
       // Detalles de la red
-      context.lineWidth = 1;
-      for (let y = startY; y < startY + courtHeight; y += 15) {
+      const netSpacing = courtHeight / 15;
+      for (let y = margin; y <= height - margin; y += netSpacing) {
         context.beginPath();
         context.moveTo(netX - 3, y);
         context.lineTo(netX + 3, y);
@@ -175,77 +156,96 @@ const VolleyballTrends = () => {
       }
     }
 
-    // Restaurar configuración
-    context.shadowColor = 'transparent';
-    context.shadowBlur = 0;
-    context.shadowOffsetX = 0;
-    context.shadowOffsetY = 0;
-    context.strokeStyle = color;
-    context.lineWidth = lineWidth;
+    // Dibujar zonas de calor
+    heatmap.forEach((value, key) => {
+      const [x, y] = key.split(',').map(Number);
+      const radius = Math.min(30, width * 0.05);
+      const heatGradient = context.createRadialGradient(x, y, 0, x, y, radius);
+      heatGradient.addColorStop(0, getHeatMapColor(value.intensity, value.color));
+      heatGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      context.fillStyle = heatGradient;
+      context.beginPath();
+      context.arc(x, y, radius, 0, Math.PI * 2);
+      context.fill();
+    });
   };
 
-  const getCoordinates = (event) => {
-    if (!canvasRef.current) return { offsetX: 0, offsetY: 0 };
-    
+  const handleCanvasClick = (event) => {
+    event.preventDefault();
     const canvas = canvasRef.current;
+    if (!canvas) return;
+
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
+    const x = ((event.touches ? event.touches[0].clientX : event.clientX) - rect.left) * scaleX;
+    const y = ((event.touches ? event.touches[0].clientY : event.clientY) - rect.top) * scaleY;
 
-    if (event.touches && event.touches[0]) {
-      const touch = event.touches[0];
-      return {
-        offsetX: (touch.clientX - rect.left) * scaleX,
-        offsetY: (touch.clientY - rect.top) * scaleY
-      };
-    }
+    const key = `${x},${y}`;
+    const newHeatmap = new Map(heatmap);
+    const currentValue = heatmap.get(key);
     
-    return {
-      offsetX: event.nativeEvent.offsetX * scaleX,
-      offsetY: event.nativeEvent.offsetY * scaleY
-    };
+    newHeatmap.set(key, {
+      intensity: Math.min((currentValue?.intensity || 0) + 0.25, 1),
+      color: heatmapColor
+    });
+    
+    setHeatmap(newHeatmap);
+    drawCourt();
   };
 
-  const startDrawing = (event) => {
-    event.preventDefault();
-    const { offsetX, offsetY } = getCoordinates(event);
-    if (contextRef.current) {
-      contextRef.current.beginPath();
-      contextRef.current.moveTo(offsetX, offsetY);
-      lastPoint.current = { x: offsetX, y: offsetY };
-      setIsDrawing(true);
+  const handleReset = () => {
+    if (window.confirm('¿Está seguro de que desea reiniciar el mapa de calor?')) {
+      setHeatmap(new Map());
+      drawCourt();
     }
   };
 
-  const draw = (event) => {
-    event.preventDefault();
-    if (!isDrawing || !contextRef.current) return;
-
-    const { offsetX, offsetY } = getCoordinates(event);
-    const context = contextRef.current;
-
-    context.beginPath();
-    context.moveTo(lastPoint.current.x, lastPoint.current.y);
-    smoothLine(context, lastPoint.current.x, lastPoint.current.y, offsetX, offsetY);
-    context.stroke();
-
-    lastPoint.current = { x: offsetX, y: offsetY };
-  };
-
-  const finishDrawing = () => {
-    if (contextRef.current) {
-      contextRef.current.closePath();
-      saveCanvasState();
+  const handleDownloadPDF = async () => {
+    if (!teamName.trim()) {
+      alert('Por favor, ingrese el nombre del equipo antes de descargar');
+      return;
     }
-    setIsDrawing(false);
-  };
 
-  const clearCanvas = () => {
-    if (window.confirm('¿Estás seguro de que deseas limpiar el dibujo?')) {
-      if (contextRef.current) {
-        drawCourt();
-        saveCanvasState();
+    try {
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      
+      // Título
+      doc.setFontSize(24);
+      doc.setTextColor(0, 0, 255);
+      doc.text('Análisis de Tendencias - Voleibol de Playa', pageWidth/2, 20, { align: 'center' });
+      
+      // Información del equipo
+      doc.setFontSize(12);
+      doc.setTextColor(0, 0, 0);
+      doc.text([
+        `Equipo: ${teamName}`,
+        `Fecha: ${format(new Date(), "PPP", { locale: es })}`
+      ], 20, 35);
+
+      // Cancha con zonas de calor
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const canvasImage = canvas.toDataURL('image/png');
+        const imgWidth = 160;
+        const imgHeight = deviceSize.isMobile ? imgWidth * (4/3) : imgWidth * (3/4);
+        const xPos = (pageWidth - imgWidth) / 2;
+        const yPos = 50;
+        
+        doc.addImage(canvasImage, 'PNG', xPos, yPos, imgWidth, imgHeight);
       }
+
+      doc.save(`tendencias-${teamName.replace(/\s+/g, '-')}-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+    } catch (error) {
+      console.error('Error al generar el PDF:', error);
+      alert('Error al generar el PDF. Por favor, intente nuevamente.');
     }
   };
 
@@ -261,52 +261,11 @@ const VolleyballTrends = () => {
     }
   };
 
-  const handleDownloadPDF = async () => {
-    if (!teamName.trim()) {
-      alert('Por favor, ingrese el nombre del equipo antes de descargar');
-      return;
-    }
-
-    try {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      saveCanvasState();
-      const imageData = canvas.toDataURL('image/png');
-      
-      const pdf = new jsPDF({
-        orientation: deviceSize.isMobile ? 'portrait' : 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      pdf.setFontSize(16);
-      pdf.setTextColor(0, 0, 255);
-      pdf.text('Análisis de Tendencias - Voleibol de Playa', 15, 15);
-
-      pdf.setFontSize(12);
-      pdf.setTextColor(0, 0, 0);
-      pdf.text(`Equipo: ${teamName}`, 15, 25);
-      pdf.text(`Fecha: ${format(new Date(), "PPP", { locale: es })}`, 15, 32);
-
-      const imgWidth = deviceSize.isMobile ? 180 : 270;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-      pdf.addImage(imageData, 'PNG', 15, 40, imgWidth, imgHeight);
-
-      pdf.save(`tendencias-${teamName.replace(/\s+/g, '-')}-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
-    } catch (error) {
-      console.error('Error al generar el PDF:', error);
-      alert('Error al generar el PDF. Por favor, intente nuevamente.');
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-400 to-blue-600 p-2 sm:p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
-        <div className={`bg-white bg-opacity-90 rounded-lg shadow-lg p-3 sm:p-4 md:p-6 
-          ${deviceSize.isMobile ? 'space-y-4' : 'space-y-6'}`}>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 mb-4">
+        <div className="bg-white bg-opacity-90 rounded-lg shadow-lg p-3 sm:p-4 md:p-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div className="flex items-center">
               <button
                 type="button"
@@ -348,102 +307,58 @@ const VolleyballTrends = () => {
             </div>
           </div>
 
-          <div className={`flex flex-wrap gap-2 mb-4 p-2 bg-white bg-opacity-50 rounded-md
-            ${deviceSize.isMobile ? 'justify-center' : 'justify-between'}`}>
-            <div className="flex flex-wrap gap-2">
-              {colorOptions.map((colorOption) => (
+          <div className="flex flex-wrap gap-2 mb-4 p-2 bg-white bg-opacity-50 rounded-md">
+            <div className="flex items-center space-x-4">
+              <span className="text-sm font-medium">Color del mapa de calor:</span>
+              <div className="flex space-x-2">
                 <button
-                  key={colorOption.value}
-                  onClick={() => {
-                    setColor(colorOption.value);
-                    if (contextRef.current) {
-                      contextRef.current.strokeStyle = colorOption.value;
-                    }
-                  }}
-                  className={`rounded-full shadow-sm transition-all ${
-                    color === colorOption.value ? 'ring-2 ring-blue-500' : ''
-                  } ${colorOption.class} hover:opacity-80 ${
-                    deviceSize.isMobile ? 'w-10 h-10' : 'w-8 h-8'
-                  }`}
-                  title={colorOption.label}
+                  type="button"
+                  onClick={() => setHeatmapColor('red')}
+                  className={`w-8 h-8 rounded-full ${
+                    heatmapColor === 'red' 
+                      ? 'ring-2 ring-offset-2 ring-red-500' 
+                      : ''
+                  } bg-red-500`}
                 />
-              ))}
-            </div>
-            <div className="flex gap-2">
-              {lineWidthOptions.map((option) => (
                 <button
-                  key={option.value}
-                  onClick={() => {
-                    setLineWidth(option.value);
-                    if (contextRef.current) {
-                      contextRef.current.lineWidth = option.value;
-                    }
-                  }}
-                  className={`px-3 py-2 rounded-md border transition-all ${
-                    lineWidth === option.value
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-300 hover:bg-gray-50'
-                  } ${deviceSize.isMobile ? 'p-4' : ''}`}
-                  title={option.label}
-                >
-                  <div 
-                    className="w-6 bg-current rounded-full mx-auto"
-                    style={{ height: `${option.value}px` }}
-                  />
-                </button>
-              ))}
+                  type="button"
+                  onClick={() => setHeatmapColor('blue')}
+                  className={`w-8 h-8 rounded-full ${
+                    heatmapColor === 'blue' 
+                      ? 'ring-2 ring-offset-2 ring-blue-500' 
+                      : ''
+                  } bg-blue-500`}
+                />
+              </div>
             </div>
             <button
               type="button"
-              onClick={clearCanvas}
-              className={`px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 
-                transition-colors ${deviceSize.isMobile ? 'w-full mt-2' : 'ml-auto'}`}
+              onClick={handleReset}
+              className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors ml-auto"
             >
               Limpiar
             </button>
           </div>
           
-          <div className="flex justify-center bg-white bg-opacity-50 p-2 sm:p-4 rounded-lg shadow-inner">
-            <div style={{ 
-              position: 'relative', 
-              width: '100%',
-              touchAction: 'none'
-            }}>
-              <canvas
-                ref={canvasRef}
-                onMouseDown={startDrawing}
-                onMouseUp={finishDrawing}
-                onMouseMove={draw}
-                onMouseLeave={finishDrawing}
-                onTouchStart={startDrawing}
-                onTouchEnd={finishDrawing}
-                onTouchMove={draw}
-                className="border border-gray-300 rounded-lg touch-none"
-                style={{ 
-                  maxWidth: '100%',
-                  height: deviceSize.isMobile ? '70vh' : '50vh',
-                  touchAction: 'none',
-                  userSelect: 'none',
-                  WebkitUserSelect: 'none',
-                  msUserSelect: 'none',
-                  MozUserSelect: 'none',
-                }}
-              />
-            </div>
+          <div className={`w-full ${deviceSize.isMobile ? 'h-[75vh]' : 'h-[50vh]'} bg-white rounded-lg shadow-inner p-4`}>
+            <canvas
+              ref={canvasRef}
+              onClick={handleCanvasClick}
+              onTouchStart={handleCanvasClick}
+              className="w-full h-full border border-gray-300 rounded-lg touch-none"
+              style={{ touchAction: 'none' }}
+            />
           </div>
 
-          {deviceSize.isMobile && (
-            <div className="mt-4 p-4 bg-blue-50 rounded-lg text-sm">
-              <h3 className="font-semibold text-blue-800 mb-2">Guía de uso:</h3>
-              <ul className="space-y-1 text-blue-600">
-                <li>• Use los botones de colores para seleccionar el color del trazo</li>
-                <li>• Seleccione el grosor de línea deseado</li>
-                <li>• Dibuje sobre la cancha usando el dedo</li>
-                <li>• Use el botón "Limpiar" para borrar todo el dibujo</li>
-                <li>• Ingrese el nombre del equipo para habilitar la descarga del PDF</li>
-              </ul>
-            </div>
-          )}
+          <div className="mt-4 text-sm text-gray-600">
+            <p className="font-medium">Instrucciones:</p>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>Toque la cancha para marcar las zonas</li>
+              <li>Use los botones de colores para cambiar entre rojo y azul</li>
+              <li>Presione varias veces en el mismo lugar para intensificar el color</li>
+              <li>Use el botón "Limpiar" para reiniciar el mapa de calor</li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>

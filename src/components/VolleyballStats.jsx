@@ -334,6 +334,32 @@ const VolleyballStats = () => {
       alert('Error al generar el PDF. Por favor, intente nuevamente.');
     }
   };
+  // En el VolleyballStats.jsx, añade esta función después de las constantes iniciales
+const getCourtDimensions = () => {
+  const isMobile = window.innerWidth < 768;
+  const container = canvasRef.current?.parentElement;
+  
+  if (!container) return { width: 0, height: 0 };
+
+  if (isMobile) {
+    // En móviles, la cancha es vertical
+    const width = container.clientWidth * 0.9;
+    return {
+      width: width,
+      height: width * (4/3), // Proporción vertical 4:3
+      isMobile: true
+    };
+  } else {
+    // En desktop, la cancha es horizontal
+    const width = container.clientWidth * 0.9;
+    const height = width * (3/4); // Proporción horizontal 3:4
+    return {
+      width: width,
+      height: height,
+      isMobile: false
+    };
+  }
+};
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-400 to-blue-600 p-2 sm:p-4 md:p-6">
