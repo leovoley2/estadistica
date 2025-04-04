@@ -443,26 +443,91 @@ export const VolleyballProvider = ({ children }) => {
     localStorage.removeItem('volleyballData');
   };
 
-  return (
-    <VolleyballContext.Provider 
-      value={{
-        statsData,
-        setStatsData,
-        matchData,
-        updatePlayerStat,
-        addTimelineAction,
-        updateScore,
-        startNewSet,
-        finishCurrentSet,
-        getCurrentSetStats,
-        trendsData,
-        setTrendsData,
-        clearAllData
-      }}
-    >
-      {children}
-    </VolleyballContext.Provider>
-  );
+  // Función para resetear completamente el partido y las estadísticas
+const resetMatchAndStats = () => {
+  // Reiniciar las estadísticas para un nuevo partido
+  setStatsData(prev => ({
+    ...prev,
+    stats: {
+      doublePositive: 0,
+      positive: 0,
+      overpass: 0,
+      negative: 0,
+      doubleNegative: 0
+    },
+    player1Stats: {
+      doublePositive: 0,
+      positive: 0,
+      overpass: 0,
+      negative: 0,
+      doubleNegative: 0
+    },
+    player2Stats: {
+      doublePositive: 0,
+      positive: 0,
+      overpass: 0,
+      negative: 0,
+      doubleNegative: 0
+    },
+    // Reiniciar solo el primer set
+    setStats: [{
+      stats: {
+        doublePositive: 0,
+        positive: 0,
+        overpass: 0,
+        negative: 0,
+        doubleNegative: 0
+      },
+      player1Stats: {
+        doublePositive: 0,
+        positive: 0,
+        overpass: 0,
+        negative: 0,
+        doubleNegative: 0
+      },
+      player2Stats: {
+        doublePositive: 0,
+        positive: 0,
+        overpass: 0,
+        negative: 0,
+        doubleNegative: 0
+      }
+    }]
+  }));
+
+  // Reiniciar el estado del partido
+  setMatchData({
+    currentSet: 1,
+    teamScore: 0,
+    opponentScore: 0,
+    sets: [
+      { teamScore: 0, opponentScore: 0, completed: false, actions: [] }
+    ]
+  });
+};
+
+ 
+return (
+  <VolleyballContext.Provider 
+    value={{
+      statsData,
+      setStatsData,
+      matchData,
+      updatePlayerStat,
+      addTimelineAction,
+      updateScore,
+      startNewSet,
+      finishCurrentSet,
+      resetMatchAndStats,
+      getCurrentSetStats,
+      trendsData,
+      setTrendsData,
+      clearAllData
+    }}
+  >
+    {children}
+  </VolleyballContext.Provider>
+);
 };
 
 export const useVolleyball = () => {

@@ -1,10 +1,17 @@
 import React from 'react';
-import { PlusCircle, MinusCircle, Flag, Check } from 'lucide-react';
+import { PlusCircle, MinusCircle, Flag, Check, RefreshCw } from 'lucide-react';
 import { useVolleyball } from '../context/VolleyballContext';
 
 const ScoreKeeper = () => {
-  const { matchData, updateScore, startNewSet, finishCurrentSet } = useVolleyball();
+  const { matchData, updateScore, startNewSet, finishCurrentSet, resetMatchAndStats } = useVolleyball();
   const { currentSet, teamScore, opponentScore, sets } = matchData;
+
+  // Función para confirmar y resetear completamente el partido
+  const handleResetComplete = () => {
+    if (window.confirm('¿Está seguro que desea resetear completamente el partido? Se borrarán todos los sets y el marcador volverá a 0-0.')) {
+      resetMatchAndStats();
+    }
+  };
 
   return (
     <div className="bg-white p-3 rounded-lg shadow-md">
@@ -13,6 +20,14 @@ const ScoreKeeper = () => {
           Set {currentSet} {currentSet <= 3 ? `de 3` : ''}
         </h3>
         <div className="flex space-x-2">
+          <button
+            onClick={handleResetComplete}
+            className="flex items-center text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600"
+            title="Resetear todo el partido"
+          >
+            <RefreshCw className="h-3 w-3 mr-1" />
+            <span>Nuevo Partido</span>
+          </button>
           <button
             onClick={finishCurrentSet}
             className={`flex items-center text-xs ${
