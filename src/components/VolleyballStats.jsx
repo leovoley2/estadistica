@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ComposedChart, Line, Legend } from 'recharts';
 import { ArrowUpCircle, ArrowDownCircle, RotateCcw, Download, TrendingUp, User, Users } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -19,10 +19,12 @@ const VolleyballStats = () => {
     setStatsData, 
     matchData,
     updatePlayerStat,
-    addTimelineAction
+    addTimelineAction,
+    getCurrentSetStats
   } = useVolleyball();
   
   const chartRef = useRef(null);
+  const setChartRef = useRef(null);
   
   const [date, setDate] = useState(statsData.date || '');
   const [name, setName] = useState(statsData.name || '');
@@ -30,12 +32,19 @@ const VolleyballStats = () => {
   const [selectedSkill, setSelectedSkill] = useState(statsData.selectedSkill || '');
   const [selectedPlayer, setSelectedPlayer] = useState(1); // Por defecto, jugador 1
   const [statView, setStatView] = useState('total'); // 'total', 'player1', 'player2'
+  const [showCurrentSetStats, setShowCurrentSetStats] = useState(true); // Toggle entre estadísticas del set actual o totales
   
-  // Referencia corta a las estadísticas según la vista seleccionada
-  const currentStats = 
-    statView === 'player1' ? statsData.player1Stats :
-    statView === 'player2' ? statsData.player2Stats :
-    statsData.stats;
+  // Obtener estadísticas del set actual
+  const currentSetData = getCurrentSetStats();
+  
+  // Estadísticas basadas en la vista actual y la configuración de set
+  const currentStats = showCurrentSetStats ? 
+    (statView === 'player1' ? currentSetData.player1Stats :
+     statView === 'player2' ? currentSetData.player2Stats :
+     currentSetData.stats) :
+    (statView === 'player1' ? statsData.player1Stats :
+     statView === 'player2' ? statsData.player2Stats :
+     statsData.stats);
 
   // Definir las categorías disponibles por tipo de tab
   const skillCategories = {
@@ -44,46 +53,132 @@ const VolleyballStats = () => {
   };
 
   const handleReset = () => {
-    if (window.confirm('¿Está seguro de que desea reiniciar las estadísticas?')) {
+    if (window.confirm(`¿Está seguro de que desea reiniciar las estadísticas ${showCurrentSetStats ? 'del set actual' : 'totales'}?`)) {
       // Resetear las estadísticas del jugador seleccionado o totales
       if (statView === 'player1' || statView === 'player2') {
         const playerKey = statView === 'player1' ? 'player1Stats' : 'player2Stats';
-        setStatsData(prev => ({
-          ...prev,
-          [playerKey]: {
-            doublePositive: 0,
-            positive: 0,
-            overpass: 0,
-            negative: 0,
-            doubleNegative: 0
-          }
-        }));
+        
+        if (showCurrentSetStats) {
+          // Reset solo para el set actual
+          setStatsData(prev => {
+            const updatedSetStats = [...prev.setStats];
+            const currentSetIndex = matchData.currentSet - 1;
+            
+            if (updatedSetStats[currentSetIndex]) {
+              updatedSetStats[currentSetIndex] = {
+                ...updatedSetStats[currentSetIndex],
+                [playerKey]: {
+                  doublePositive: 0,
+                  positive: 0,
+                  overpass: 0,
+                  negative: 0,
+                  doubleNegative: 0
+                }
+              };
+              
+              // Recalcular estadísticas totales del set
+              const player1 = playerKey === 'player1Stats' ? 
+                { doublePositive: 0, positive: 0, overpass: 0, negative: 0, doubleNegative: 0 } : 
+                updatedSetStats[currentSetIndex].player1Stats;
+                
+              const player2 = playerKey === 'player2Stats' ? 
+                { doublePositive: 0, positive: 0, overpass: 0, negative: 0, doubleNegative: 0 } : 
+                updatedSetStats[currentSetIndex].player2Stats;
+              
+              updatedSetStats[currentSetIndex].stats = {
+                doublePositive: player1.doublePositive + player2.doublePositive,
+                positive: player1.positive + player2.positive,
+                overpass: player1.overpass + player2.overpass,
+                negative: player1.negative + player2.negative,
+                doubleNegative: player1.doubleNegative + player2.doubleNegative
+              };
+            }
+            
+            return {
+              ...prev,
+              setStats: updatedSetStats
+            };
+          });
+          
+        } else {
+          // Reset de las estadísticas totales del jugador
+          setStatsData(prev => ({
+            ...prev,
+            [playerKey]: {
+              doublePositive: 0,
+              positive: 0,
+              overpass: 0,
+              negative: 0,
+              doubleNegative: 0
+            }
+          }));
+        }
       } else {
-        // Resetear totales
-        setStatsData(prev => ({
-          ...prev,
-          stats: {
-            doublePositive: 0,
-            positive: 0,
-            overpass: 0,
-            negative: 0,
-            doubleNegative: 0
-          },
-          player1Stats: {
-            doublePositive: 0,
-            positive: 0,
-            overpass: 0,
-            negative: 0,
-            doubleNegative: 0
-          },
-          player2Stats: {
-            doublePositive: 0,
-            positive: 0,
-            overpass: 0,
-            negative: 0,
-            doubleNegative: 0
-          }
-        }));
+        // Resetear estadísticas totales de ambos jugadores
+        if (showCurrentSetStats) {
+          // Solo para el set actual
+          setStatsData(prev => {
+            const updatedSetStats = [...prev.setStats];
+            const currentSetIndex = matchData.currentSet - 1;
+            
+            if (updatedSetStats[currentSetIndex]) {
+              updatedSetStats[currentSetIndex] = {
+                stats: {
+                  doublePositive: 0,
+                  positive: 0,
+                  overpass: 0,
+                  negative: 0,
+                  doubleNegative: 0
+                },
+                player1Stats: {
+                  doublePositive: 0,
+                  positive: 0,
+                  overpass: 0,
+                  negative: 0,
+                  doubleNegative: 0
+                },
+                player2Stats: {
+                  doublePositive: 0,
+                  positive: 0,
+                  overpass: 0,
+                  negative: 0,
+                  doubleNegative: 0
+                }
+              };
+            }
+            
+            return {
+              ...prev,
+              setStats: updatedSetStats
+            };
+          });
+        } else {
+          // Reset de todas las estadísticas
+          setStatsData(prev => ({
+            ...prev,
+            stats: {
+              doublePositive: 0,
+              positive: 0,
+              overpass: 0,
+              negative: 0,
+              doubleNegative: 0
+            },
+            player1Stats: {
+              doublePositive: 0,
+              positive: 0,
+              overpass: 0,
+              negative: 0,
+              doubleNegative: 0
+            },
+            player2Stats: {
+              doublePositive: 0,
+              positive: 0,
+              overpass: 0,
+              negative: 0,
+              doubleNegative: 0
+            }
+          }));
+        }
       }
     }
   };
@@ -132,6 +227,42 @@ const VolleyballStats = () => {
     return (((currentStats.doublePositive + currentStats.positive) / total) * 100).toFixed(2);
   };
 
+  // Preparar datos para el gráfico de comparación de sets
+  const prepareSetComparisonData = () => {
+    return statsData.setStats.map((setData, index) => {
+      const setNum = index + 1;
+      // Calcular eficiencia para cada jugador
+      const p1Total = Object.values(setData.player1Stats).reduce((a, b) => a + b, 0) || 1;
+      const p2Total = Object.values(setData.player2Stats).reduce((a, b) => a + b, 0) || 1;
+      
+      const p1WeightedSum = (
+        setData.player1Stats.doublePositive * 4 +
+        setData.player1Stats.positive * 2 +
+        setData.player1Stats.overpass * 0 +
+        setData.player1Stats.negative * -2 +
+        setData.player1Stats.doubleNegative * -4
+      );
+      
+      const p2WeightedSum = (
+        setData.player2Stats.doublePositive * 4 +
+        setData.player2Stats.positive * 2 +
+        setData.player2Stats.overpass * 0 +
+        setData.player2Stats.negative * -2 +
+        setData.player2Stats.doubleNegative * -4
+      );
+      
+      const p1Efficiency = ((p1WeightedSum / (p1Total * 4)) * 100) || 0;
+      const p2Efficiency = ((p2WeightedSum / (p2Total * 4)) * 100) || 0;
+      
+      return {
+        name: `Set ${setNum}`,
+        'Jugador 1': p1Efficiency,
+        'Jugador 2': p2Efficiency,
+        'Marcador': `${matchData.sets[index]?.teamScore || 0}-${matchData.sets[index]?.opponentScore || 0}`
+      };
+    });
+  };
+
   const handleDownloadPDF = async () => {
     if (!name || !date || !selectedSkill) {
       alert('Por favor, complete todos los campos antes de descargar el PDF');
@@ -164,76 +295,105 @@ const VolleyballStats = () => {
         `Marcador: ${matchData.teamScore} - ${matchData.opponentScore}`
       ], 15, 25);
   
-      // Estadísticas totales
+      // Estadísticas globales
       doc.setFontSize(12);
-      doc.text('Estadísticas del Equipo:', 15, 45);
+      doc.text('Estadísticas Totales del Equipo:', 15, 45);
       doc.setFontSize(10);
       
       const stats_text = [
-        `Total de Acciones: ${calculateTotalActions()}`,
+        `Total de Acciones: ${Object.values(statsData.stats).reduce((a, b) => a + b, 0)}`,
         `Doble Positivo (##): ${statsData.stats.doublePositive}`,
         `Positivo (+): ${statsData.stats.positive}`,
         `Overpass (/): ${statsData.stats.overpass}`,
         `Negativo (-): ${statsData.stats.negative}`,
         `Doble Negativo (=): ${statsData.stats.doubleNegative}`,
-        '',
-        `Eficiencia: ${calculateEfficiency()}%`,
-        `Eficacia: ${calculateEffectiveness()}%`
       ];
       
       doc.text(stats_text, 15, 55);
-  
-      // Estadísticas por jugador
+      
+      // Estadísticas por sets
+      let yPos = 75;
+      
+      // Título de la sección
       doc.setFontSize(12);
-      doc.text('Jugador 1:', 15, 85);
+      doc.text('Estadísticas por Set:', 15, yPos);
       doc.setFontSize(10);
+      yPos += 8;
       
-      const player1_stats = [
-        `Total de Acciones: ${Object.values(statsData.player1Stats).reduce((a, b) => a + b, 0)}`,
-        `Doble Positivo (##): ${statsData.player1Stats.doublePositive}`,
-        `Positivo (+): ${statsData.player1Stats.positive}`,
-        `Overpass (/): ${statsData.player1Stats.overpass}`,
-        `Negativo (-): ${statsData.player1Stats.negative}`,
-        `Doble Negativo (=): ${statsData.player1Stats.doubleNegative}`
-      ];
-      
-      doc.text(player1_stats, 15, 95);
-      
-      doc.setFontSize(12);
-      doc.text('Jugador 2:', 15, 115);
-      doc.setFontSize(10);
-      
-      const player2_stats = [
-        `Total de Acciones: ${Object.values(statsData.player2Stats).reduce((a, b) => a + b, 0)}`,
-        `Doble Positivo (##): ${statsData.player2Stats.doublePositive}`,
-        `Positivo (+): ${statsData.player2Stats.positive}`,
-        `Overpass (/): ${statsData.player2Stats.overpass}`,
-        `Negativo (-): ${statsData.player2Stats.negative}`,
-        `Doble Negativo (=): ${statsData.player2Stats.doubleNegative}`
-      ];
-      
-      doc.text(player2_stats, 15, 125);
-      
+      statsData.setStats.forEach((set, index) => {
+        if (index < 3) { // Solo mostrar máximo 3 sets
+          doc.setFillColor(240, 240, 240);
+          doc.rect(15, yPos - 4, 180, 7, 'F');
+          doc.text(`Set ${index + 1} - Marcador: ${matchData.sets[index]?.teamScore || 0}-${matchData.sets[index]?.opponentScore || 0}`, 17, yPos);
+          yPos += 8;
+          
+          // Tabla para jugador 1
+          doc.text(`Jugador 1:`, 15, yPos);
+          yPos += 5;
+          
+          const setDataP1 = [
+            `Doble Positivo (##): ${set.player1Stats.doublePositive}`,
+            `Positivo (+): ${set.player1Stats.positive}`,
+            `Overpass (/): ${set.player1Stats.overpass}`,
+            `Negativo (-): ${set.player1Stats.negative}`,
+            `Doble Negativo (=): ${set.player1Stats.doubleNegative}`,
+          ];
+          
+          doc.text(setDataP1, 15, yPos);
+          yPos += 15;
+          
+          // Tabla para jugador 2
+          doc.text(`Jugador 2:`, 15, yPos);
+          yPos += 5;
+          
+          const setDataP2 = [
+            `Doble Positivo (##): ${set.player2Stats.doublePositive}`,
+            `Positivo (+): ${set.player2Stats.positive}`,
+            `Overpass (/): ${set.player2Stats.overpass}`,
+            `Negativo (-): ${set.player2Stats.negative}`,
+            `Doble Negativo (=): ${set.player2Stats.doubleNegative}`,
+          ];
+          
+          doc.text(setDataP2, 15, yPos);
+          yPos += 20;
+        }
+      });
+
       // Gráfico de barras
       const chartDiv = chartRef.current;
       if (chartDiv) {
         const chartImage = await html2canvas(chartDiv);
         const chartData = chartImage.toDataURL('image/png');
-        doc.addImage(chartData, 'PNG', 15, 145, pageWidth - 30, pageHeight * 0.25);
+        doc.addImage(chartData, 'PNG', 15, yPos, pageWidth - 30, pageHeight * 0.25);
       }
-
-      // Criterios de evaluación según el fundamento seleccionado
+      
+      // Agregar segunda página con gráficos
       doc.addPage();
+      
+      // Gráfico de comparación por sets
       doc.setFontSize(14);
       doc.setTextColor(0, 0, 255);
-      doc.text('Criterios de Evaluación', pageWidth/2, 15, { align: 'center' });
+      doc.text('Comparación de Eficiencia por Sets', pageWidth/2, 15, { align: 'center' });
+      
+      // Capturar y agregar el gráfico de comparación
+      const setChartDiv = setChartRef.current;
+      if (setChartDiv) {
+        const setChartImage = await html2canvas(setChartDiv);
+        const setChartData = setChartImage.toDataURL('image/png');
+        doc.addImage(setChartData, 'PNG', 15, 25, pageWidth - 30, pageHeight * 0.3);
+      }
+      
+      // Criterios de evaluación
+      doc.setFontSize(14);
+      doc.setTextColor(0, 0, 255);
+      doc.text('Criterios de Evaluación', pageWidth/2, pageHeight * 0.4, { align: 'center' });
       
       doc.setFontSize(12);
       doc.setTextColor(0, 0, 0);
-      doc.text(`Fundamento: ${selectedSkill}`, 15, 25);
+      doc.text(`Fundamento: ${selectedSkill}`, 15, pageHeight * 0.4 + 10);
 
       // Tabla de criterios (simplificada para el PDF)
-      const criterioPosY = 35;
+      const criterioPosY = pageHeight * 0.4 + 20;
       const lineHeight = 7;
       
       // Encabezado de tabla
@@ -364,46 +524,71 @@ const VolleyballStats = () => {
             <ScoreKeeper />
 
             {/* Selector de Jugador y Vista de Estadísticas */}
-            <div className="flex flex-wrap items-center justify-between gap-2 py-2 px-3 bg-gray-50 rounded-lg">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2 py-2 px-3 bg-gray-50 rounded-lg">
               <PlayerSelector 
                 selectedPlayer={selectedPlayer} 
                 onSelectPlayer={setSelectedPlayer} 
               />
               
-              <div className="flex rounded overflow-hidden border">
-                <button
-                  onClick={() => setStatView('total')}
-                  className={`px-3 py-1.5 text-xs ${
-                    statView === 'total' 
-                      ? 'bg-purple-500 text-white' 
-                      : 'bg-white text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  <Users className="h-3 w-3 inline mr-1" />
-                  Equipo
-                </button>
-                <button
-                  onClick={() => setStatView('player1')}
-                  className={`px-3 py-1.5 text-xs ${
-                    statView === 'player1' 
-                      ? 'bg-blue-500 text-white' 
-                      : 'bg-white text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  <User className="h-3 w-3 inline mr-1" />
-                  Jugador 1
-                </button>
-                <button
-                  onClick={() => setStatView('player2')}
-                  className={`px-3 py-1.5 text-xs ${
-                    statView === 'player2' 
-                      ? 'bg-green-500 text-white' 
-                      : 'bg-white text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  <User className="h-3 w-3 inline mr-1" />
-                  Jugador 2
-                </button>
+              <div className="flex flex-col sm:flex-row items-center gap-2">
+                <div className="flex rounded overflow-hidden border">
+                  <button
+                    onClick={() => setStatView('total')}
+                    className={`px-3 py-1.5 text-xs ${
+                      statView === 'total' 
+                        ? 'bg-purple-500 text-white' 
+                        : 'bg-white text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    <Users className="h-3 w-3 inline mr-1" />
+                    Equipo
+                  </button>
+                  <button
+                    onClick={() => setStatView('player1')}
+                    className={`px-3 py-1.5 text-xs ${
+                      statView === 'player1' 
+                        ? 'bg-blue-500 text-white' 
+                        : 'bg-white text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    <User className="h-3 w-3 inline mr-1" />
+                    Jugador 1
+                  </button>
+                  <button
+                    onClick={() => setStatView('player2')}
+                    className={`px-3 py-1.5 text-xs ${
+                      statView === 'player2' 
+                        ? 'bg-green-500 text-white' 
+                        : 'bg-white text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    <User className="h-3 w-3 inline mr-1" />
+                    Jugador 2
+                  </button>
+                </div>
+                
+                <div className="flex rounded overflow-hidden border">
+                  <button
+                    onClick={() => setShowCurrentSetStats(true)}
+                    className={`px-3 py-1.5 text-xs ${
+                      showCurrentSetStats
+                        ? 'bg-blue-500 text-white' 
+                        : 'bg-white text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    Set Actual
+                  </button>
+                  <button
+                    onClick={() => setShowCurrentSetStats(false)}
+                    className={`px-3 py-1.5 text-xs ${
+                      !showCurrentSetStats 
+                        ? 'bg-blue-500 text-white' 
+                        : 'bg-white text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    Total Partido
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -457,7 +642,7 @@ const VolleyballStats = () => {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" />
                     <YAxis />
-                    <Tooltip />
+                    <Tooltip formatter={(value) => [`${value}`, 'Cantidad']} />
                     <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                       {[
                         { color: '#22c55e' },
@@ -474,10 +659,31 @@ const VolleyballStats = () => {
               </div>
             </div>
 
+            {/* Gráfico comparativo por sets */}
+            <div className="w-full" ref={setChartRef}>
+              <div className="bg-white p-4 rounded-lg h-[300px] sm:h-[400px]">
+              <h3 className="text-sm font-medium mb-2">Comparación de Eficiencia por Set</h3>
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={prepareSetComparisonData()}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis 
+                      label={{ value: 'Eficiencia %', angle: -90, position: 'insideLeft' }} 
+                      domain={[0, 100]}
+                    />
+                    <Tooltip formatter={(value) => [`${value.toFixed(2)}%`, '']} />
+                    <Legend />
+                    <Bar dataKey="Jugador 1" fill="#3b82f6" />
+                    <Bar dataKey="Jugador 2" fill="#22c55e" />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
             {/* Resultados */}
             <div className="bg-blue-50 p-4 rounded-lg">
               <h3 className="text-lg font-semibold mb-2">
-                Resultados {statView === 'player1' ? '(Jugador 1)' : statView === 'player2' ? '(Jugador 2)' : '(Equipo)'}
+                Resultados {statView === 'player1' ? '(Jugador 1)' : statView === 'player2' ? '(Jugador 2)' : '(Equipo)'} - {showCurrentSetStats ? `Set ${matchData.currentSet}` : 'Partido Completo'}
               </h3>
               <div className="space-y-2">
                 <p className="text-sm font-medium">

@@ -1,24 +1,40 @@
 import React from 'react';
-import { PlusCircle, MinusCircle, Flag } from 'lucide-react';
+import { PlusCircle, MinusCircle, Flag, Check } from 'lucide-react';
 import { useVolleyball } from '../context/VolleyballContext';
 
 const ScoreKeeper = () => {
-  const { matchData, updateScore, startNewSet } = useVolleyball();
+  const { matchData, updateScore, startNewSet, finishCurrentSet } = useVolleyball();
   const { currentSet, teamScore, opponentScore, sets } = matchData;
 
   return (
     <div className="bg-white p-3 rounded-lg shadow-md">
       <div className="flex justify-between items-center mb-3">
         <h3 className="text-sm font-semibold text-gray-700">
-          Set {currentSet}
+          Set {currentSet} {currentSet <= 3 ? `de 3` : ''}
         </h3>
-        <button
-          onClick={startNewSet}
-          className="flex items-center text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
-        >
-          <Flag className="h-3 w-3 mr-1" />
-          <span>Nuevo Set</span>
-        </button>
+        <div className="flex space-x-2">
+          <button
+            onClick={finishCurrentSet}
+            className={`flex items-center text-xs ${
+              sets[currentSet - 1]?.completed 
+                ? 'bg-gray-300 cursor-not-allowed' 
+                : 'bg-green-500 hover:bg-green-600'
+            } text-white px-2 py-1 rounded`}
+            disabled={sets[currentSet - 1]?.completed}
+          >
+            <Check className="h-3 w-3 mr-1" />
+            <span>Finalizar Set</span>
+          </button>
+          {currentSet < 3 && (
+            <button
+              onClick={startNewSet}
+              className="flex items-center text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
+            >
+              <Flag className="h-3 w-3 mr-1" />
+              <span>Nuevo Set</span>
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex justify-between items-center">
@@ -70,13 +86,20 @@ const ScoreKeeper = () => {
       {/* Resumen de sets anteriores */}
       {sets.length > 1 && (
         <div className="mt-3 pt-3 border-t">
-          <h4 className="text-xs font-medium text-gray-500 mb-1">Sets Anteriores</h4>
+          <h4 className="text-xs font-medium text-gray-500 mb-1">Sets</h4>
           <div className="flex flex-wrap gap-2">
-            {sets.filter(set => set.completed).map((set, index) => (
-              <div key={index} className="text-xs px-2 py-1 bg-gray-100 rounded">
-                Set {index + 1}: <span className="font-medium text-blue-600">{set.teamScore}</span>
+            {sets.map((set, index) => (
+              <div 
+                key={index} 
+                className={`text-xs px-2 py-1 rounded flex items-center ${
+                  set.completed ? 'bg-gray-100' : 'bg-blue-50 border border-blue-200'
+                }`}
+              >
+                Set {index + 1}: 
+                <span className="font-medium text-blue-600 ml-1">{set.teamScore}</span>
                 {' - '}
                 <span className="font-medium text-red-600">{set.opponentScore}</span>
+                {set.completed && <Check className="h-3 w-3 ml-1 text-green-500" />}
               </div>
             ))}
           </div>
