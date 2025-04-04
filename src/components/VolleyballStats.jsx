@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { ArrowUpCircle, ArrowDownCircle, RotateCcw, Download, TrendingUp } from 'lucide-react';
 import { jsPDF } from 'jspdf';
@@ -7,6 +7,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useNavigate } from 'react-router-dom';
 import { useVolleyball } from '../context/VolleyballContext';
+import EvaluationCriteria from './EvaluationCriteria';
 
 const VolleyballStats = () => {
   const navigate = useNavigate();
@@ -20,14 +21,14 @@ const VolleyballStats = () => {
   const [stats, setStats] = useState(statsData.stats || {
     doublePositive: 0,
     positive: 0,
-    regular: 0,
+    overpass: 0,
     negative: 0,
     doubleNegative: 0
   });
 
   // Definir las categorías disponibles por tipo de tab
   const skillCategories = {
-    fundamentos: ['Recepción', 'Armado', 'Defensa', 'Ataque'],
+    fundamentos: ['Recepción', 'Armado', 'Defensa', 'Ataque', 'Bloqueo', 'Saque'],
     fases: ['K1', 'K2']
   };
 
@@ -36,7 +37,7 @@ const VolleyballStats = () => {
       setStats({
         doublePositive: 0,
         positive: 0,
-        regular: 0,
+        overpass: 0,
         negative: 0,
         doubleNegative: 0
       });
@@ -51,7 +52,7 @@ const VolleyballStats = () => {
     const weightedSum = (
       stats.doublePositive * 4 +
       stats.positive * 2 +
-      stats.regular * 0 +
+      stats.overpass * 0 +
       stats.negative * -2 +
       stats.doubleNegative * -4
     );
@@ -103,7 +104,7 @@ const VolleyballStats = () => {
         `Total de Acciones: ${calculateTotalActions()}`,
         `Doble Positivo (##): ${stats.doublePositive}`,
         `Positivo (+): ${stats.positive}`,
-        `Regular (!): ${stats.regular}`,
+        `Overpass (/): ${stats.overpass}`,
         `Negativo (-): ${stats.negative}`,
         `Doble Negativo (=): ${stats.doubleNegative}`,
         '',
@@ -118,8 +119,51 @@ const VolleyballStats = () => {
       if (chartDiv) {
         const chartImage = await html2canvas(chartDiv);
         const chartData = chartImage.toDataURL('image/png');
-        doc.addImage(chartData, 'PNG', 15, 100, pageWidth - 30, pageHeight * 0.3);
+        doc.addImage(chartData, 'PNG', 15, 95, pageWidth - 30, pageHeight * 0.25);
       }
+
+      // Criterios de evaluación según el fundamento seleccionado
+      doc.addPage();
+      doc.setFontSize(14);
+      doc.setTextColor(0, 0, 255);
+      doc.text('Criterios de Evaluación', pageWidth/2, 15, { align: 'center' });
+      
+      doc.setFontSize(12);
+      doc.setTextColor(0, 0, 0);
+      doc.text(`Fundamento: ${selectedSkill}`, 15, 25);
+
+      // Tabla de criterios (simplificada para el PDF)
+      const criterioPosY = 35;
+      const lineHeight = 7;
+      
+      // Encabezado de tabla
+      doc.setFillColor(230, 230, 230);
+      doc.rect(15, criterioPosY, 180, 7, 'F');
+      doc.setFontSize(10);
+      doc.setTextColor(0, 0, 0);
+      doc.text("Símbolo", 17, criterioPosY + 5);
+      doc.text("Tipo", 47, criterioPosY + 5);
+      doc.text("Descripción", 97, criterioPosY + 5);
+      
+      // Filas de la tabla
+      const criterios = [
+        { symbol: "##", tipo: "Doble Positivo", desc: "Acción perfecta o punto directo" },
+        { symbol: "+", tipo: "Positivo", desc: "Acción que genera ventaja para el equipo" },
+        { symbol: "/", tipo: "Overpass", desc: "Acción que resulta en pase al campo contrario" },
+        { symbol: "-", tipo: "Negativo", desc: "Acción que genera desventaja para el equipo" },
+        { symbol: "=", tipo: "Doble Negativo", desc: "Error" }
+      ];
+      
+      criterios.forEach((criterio, idx) => {
+        const y = criterioPosY + ((idx + 1) * lineHeight);
+        if (idx % 2 === 0) {
+          doc.setFillColor(245, 245, 245);
+          doc.rect(15, y, 180, lineHeight, 'F');
+        }
+        doc.text(criterio.symbol, 17, y + 5);
+        doc.text(criterio.tipo, 47, y + 5);
+        doc.text(criterio.desc, 97, y + 5);
+      });
   
       doc.save(`estadisticas-${name}-${date}.pdf`);
     } catch (error) {
@@ -139,7 +183,7 @@ const VolleyballStats = () => {
   };
 
   // Actualizar el contexto cuando cambien los datos relevantes
-  React.useEffect(() => {
+  useEffect(() => {
     saveStats();
   }, [date, name, selectedSkill, stats]);
 
@@ -226,7 +270,7 @@ const VolleyballStats = () => {
               {[
                 { key: 'doublePositive', label: '## (Doble Positivo)', color: '#22c55e' },
                 { key: 'positive', label: '+ (Positivo)', color: '#3b82f6' },
-                { key: 'regular', label: '! (Regular)', color: '#f59e0b' },
+                { key: 'overpass', label: '/ (Overpass)', color: '#f59e0b' },
                 { key: 'negative', label: '- (Negativo)', color: '#ef4444' },
                 { key: 'doubleNegative', label: '= (Doble Negativo)', color: '#7f1d1d' }
               ].map(({ key, label, color }) => (
@@ -270,7 +314,7 @@ const VolleyballStats = () => {
                   <BarChart data={[
                     { name: '##', value: stats.doublePositive, color: '#22c55e' },
                     { name: '+', value: stats.positive, color: '#3b82f6' },
-                    { name: '!', value: stats.regular, color: '#f59e0b' },
+                    { name: '/', value: stats.overpass, color: '#f59e0b' },
                     { name: '-', value: stats.negative, color: '#ef4444' },
                     { name: '=', value: stats.doubleNegative, color: '#7f1d1d' }
                   ]}>
@@ -306,6 +350,11 @@ const VolleyballStats = () => {
                   <p className="text-sm">Eficacia: <span className="font-medium">{calculateEffectiveness()}%</span></p>
                 </div>
               </div>
+            </div>
+            
+            {/* Criterios de Evaluación */}
+            <div className="mt-4">
+              <EvaluationCriteria />
             </div>
 
             {/* Botones de acción */}

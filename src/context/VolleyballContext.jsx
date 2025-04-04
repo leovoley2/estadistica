@@ -11,7 +11,7 @@ export const VolleyballProvider = ({ children }) => {
     stats: {
       doublePositive: 0,
       positive: 0,
-      regular: 0,
+      overpass: 0,
       negative: 0,
       doubleNegative: 0
     }
@@ -19,6 +19,7 @@ export const VolleyballProvider = ({ children }) => {
 
   const [trendsData, setTrendsData] = useState({
     teamName: '',
+    selectedSkill: '',
     canvasImage: null
   });
 
@@ -28,6 +29,13 @@ export const VolleyballProvider = ({ children }) => {
     if (savedData) {
       try {
         const parsed = JSON.parse(savedData);
+        
+        // Migrar datos antiguos si es necesario (cambiar regular a overpass)
+        if (parsed.statsData && parsed.statsData.stats && 'regular' in parsed.statsData.stats) {
+          parsed.statsData.stats.overpass = parsed.statsData.stats.regular || 0;
+          delete parsed.statsData.stats.regular;
+        }
+        
         setStatsData(parsed.statsData);
         setTrendsData(parsed.trendsData);
       } catch (error) {
@@ -56,13 +64,14 @@ export const VolleyballProvider = ({ children }) => {
       stats: {
         doublePositive: 0,
         positive: 0,
-        regular: 0,
+        overpass: 0,
         negative: 0,
         doubleNegative: 0
       }
     });
     setTrendsData({
       teamName: '',
+      selectedSkill: '',
       canvasImage: null
     });
     localStorage.removeItem('volleyballData');
