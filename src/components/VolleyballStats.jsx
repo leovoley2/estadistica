@@ -7,7 +7,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useNavigate } from 'react-router-dom';
 import { useVolleyball } from '../context/VolleyballContext';
-import EvaluationCriteria from './EvaluationCriteria';
+import EvaluationCriteria from './EvaluatioinCriteria';
 import ScoreKeeper from './ScoreKeeper';
 import PlayerSelector from './PlayerSelector';
 import ActionTimeline from './Timeline';
