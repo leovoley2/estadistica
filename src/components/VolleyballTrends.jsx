@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Download } from 'lucide-react';
+import { ArrowLeft, Download, User, Users } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { useNavigate } from 'react-router-dom';
@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useVolleyball } from '../context/VolleyballContext';
 import { useDeviceSize } from '../hooks/useDeviceSize';
+import PlayerSelector from './PlayerSelector';
 
 const HEATMAP_COLORS = {
   red: [
@@ -20,6 +21,12 @@ const HEATMAP_COLORS = {
     'rgba(0, 0, 255, 0.4)',
     'rgba(0, 0, 255, 0.5)',
     'rgba(0, 0, 255, 0.6)'
+  ],
+  green: [
+    'rgba(0, 128, 0, 0.3)', 
+    'rgba(0, 128, 0, 0.4)',
+    'rgba(0, 128, 0, 0.5)',
+    'rgba(0, 128, 0, 0.6)'
   ]
 };
 
@@ -31,13 +38,14 @@ const getHeatMapColor = (intensity, colorType) => {
 
 const VolleyballTrends = () => {
   const navigate = useNavigate();
-  const { statsData, trendsData, setTrendsData } = useVolleyball();
+  const { statsData, trendsData, setTrendsData, matchData } = useVolleyball();
   const deviceSize = useDeviceSize();
   const canvasRef = useRef(null);
   const [heatmap, setHeatmap] = useState(new Map());
   const [heatmapColor, setHeatmapColor] = useState('red');
   const [teamName, setTeamName] = useState(trendsData.teamName || statsData.name || '');
   const [selectedSkill, setSelectedSkill] = useState(statsData.selectedSkill || '');
+  const [selectedPlayer, setSelectedPlayer] = useState(null); // null = equipo completo
 
   const getCourtDimensions = () => {
     const isMobile = window.innerWidth < 768;
@@ -81,6 +89,17 @@ const VolleyballTrends = () => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [deviceSize, heatmap, heatmapColor]);
+
+  // Actualizar color del mapa de calor basado en el jugador seleccionado
+  useEffect(() => {
+    if (selectedPlayer === 1) {
+      setHeatmapColor('blue');
+    } else if (selectedPlayer === 2) {
+      setHeatmapColor('green');
+    } else {
+      setHeatmapColor('red');
+    }
+  }, [selectedPlayer]);
 
   const drawCourt = () => {
     const canvas = canvasRef.current;
@@ -169,6 +188,23 @@ const VolleyballTrends = () => {
       context.arc(x, y, radius, 0, Math.PI * 2);
       context.fill();
     });
+    
+    // Añadir leyenda
+    context.font = `${Math.max(10, width * 0.025)}px Arial`;
+    context.fillStyle = '#000';
+    const legendY = height - margin * 0.6;
+    const legendX = margin;
+    
+    if (selectedPlayer === null) {
+      context.fillText('Equipo Completo', legendX, legendY);
+    } else {
+      context.fillStyle = selectedPlayer === 1 ? 'blue' : 'green';
+      context.fillText(`Jugador ${selectedPlayer}`, legendX, legendY);
+    }
+    
+    // Añadir indicador de set actual
+    context.fillStyle = '#000';
+    context.fillText(`Set ${matchData.currentSet}`, width - margin - 50, legendY);
   };
 
   const handleCanvasClick = (event) => {
@@ -188,7 +224,10 @@ const VolleyballTrends = () => {
     
     newHeatmap.set(key, {
       intensity: Math.min((currentValue?.intensity || 0) + 0.25, 1),
-      color: heatmapColor
+      color: heatmapColor,
+      player: selectedPlayer,
+      timestamp: new Date(),
+      score: `${matchData.teamScore}-${matchData.opponentScore}`
     });
     
     setHeatmap(newHeatmap);
@@ -229,6 +268,7 @@ const VolleyballTrends = () => {
       doc.text([
         `Equipo: ${teamName}`,
         `Fundamento: ${selectedSkill}`,
+        `Set: ${matchData.currentSet} (${matchData.teamScore}-${matchData.opponentScore})`,
         `Fecha: ${format(new Date(), "PPP", { locale: es })}`
       ], 20, 35);
 
@@ -243,6 +283,21 @@ const VolleyballTrends = () => {
         
         doc.addImage(canvasImage, 'PNG', xPos, yPos, imgWidth, imgHeight);
       }
+
+      // Leyenda de jugadores
+      doc.setFontSize(10);
+      doc.setDrawColor(0);
+      doc.setFillColor(255, 0, 0);
+      doc.circle(20, 130, 3, 'F');
+      doc.text('Equipo completo', 25, 132);
+      
+      doc.setFillColor(0, 0, 255);
+      doc.circle(70, 130, 3, 'F');
+      doc.text('Jugador 1', 75, 132);
+      
+      doc.setFillColor(0, 128, 0);
+      doc.circle(110, 130, 3, 'F');
+      doc.text('Jugador 2', 115, 132);
 
       doc.save(`mapa-calor-${teamName.replace(/\s+/g, '-')}-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
     } catch (error) {
@@ -290,7 +345,7 @@ const VolleyballTrends = () => {
             </div>
             
             <div className="flex-grow">
-              <label className="block text-xs font-medium text-gray-700 mb-1">Acción</label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Fundamento</label>
               <input
                 type="text"
                 value={selectedSkill}
@@ -300,29 +355,15 @@ const VolleyballTrends = () => {
               />
             </div>
 
-            <div className="flex items-center space-x-2 mt-5">
-              <span className="text-xs font-medium text-gray-700 whitespace-nowrap">Color:</span>
-              <button
-                type="button"
-                onClick={() => setHeatmapColor('red')}
-                className={`w-6 h-6 rounded-full ${
-                  heatmapColor === 'red' 
-                    ? 'ring-2 ring-offset-1 ring-red-500' 
-                    : ''
-                } bg-red-500`}
-              />
-              <button
-                type="button"
-                onClick={() => setHeatmapColor('blue')}
-                className={`w-6 h-6 rounded-full ${
-                  heatmapColor === 'blue' 
-                    ? 'ring-2 ring-offset-1 ring-blue-500' 
-                    : ''
-                } bg-blue-500`}
+            <div className="flex-grow">
+              <label className="block text-xs font-medium text-gray-700 mb-1">Jugador</label>
+              <PlayerSelector
+                selectedPlayer={selectedPlayer}
+                onSelectPlayer={setSelectedPlayer}
               />
             </div>
 
-            <div className="flex space-x-2 mt-5 ml-auto">
+            <div className="flex space-x-2 mt-auto ml-auto">
               <button
                 type="button"
                 onClick={handleReset}
@@ -360,7 +401,7 @@ const VolleyballTrends = () => {
             <p className="font-medium">Instrucciones:</p>
             <ul className="list-disc pl-5 space-y-1">
               <li>Toque la cancha para marcar las zonas</li>
-              <li>Use los botones de colores para cambiar entre rojo y azul</li>
+              <li>Seleccione un jugador específico o "Ambos" para registrar sus datos</li>
               <li>Presione varias veces en el mismo lugar para intensificar el color</li>
               <li>Use el botón "Limpiar" para reiniciar el mapa de calor</li>
             </ul>

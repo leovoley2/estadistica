@@ -1,30 +1,41 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { ArrowUpCircle, ArrowDownCircle, RotateCcw, Download, TrendingUp } from 'lucide-react';
+import { ArrowUpCircle, ArrowDownCircle, RotateCcw, Download, TrendingUp, User, Users } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useNavigate } from 'react-router-dom';
 import { useVolleyball } from '../context/VolleyballContext';
-import EvaluationCriteria from './EvaluatioinCriteria';
+import EvaluationCriteria from './EvaluationCriteria';
+import ScoreKeeper from './ScoreKeeper';
+import PlayerSelector from './PlayerSelector';
+import ActionTimeline from './Timeline';
 
 const VolleyballStats = () => {
   const navigate = useNavigate();
-  const { statsData, setStatsData } = useVolleyball();
+  const { 
+    statsData, 
+    setStatsData, 
+    matchData,
+    updatePlayerStat,
+    addTimelineAction
+  } = useVolleyball();
+  
   const chartRef = useRef(null);
   
   const [date, setDate] = useState(statsData.date || '');
   const [name, setName] = useState(statsData.name || '');
   const [activeTab, setActiveTab] = useState('fundamentos');
   const [selectedSkill, setSelectedSkill] = useState(statsData.selectedSkill || '');
-  const [stats, setStats] = useState(statsData.stats || {
-    doublePositive: 0,
-    positive: 0,
-    overpass: 0,
-    negative: 0,
-    doubleNegative: 0
-  });
+  const [selectedPlayer, setSelectedPlayer] = useState(1); // Por defecto, jugador 1
+  const [statView, setStatView] = useState('total'); // 'total', 'player1', 'player2'
+  
+  // Referencia corta a las estadísticas según la vista seleccionada
+  const currentStats = 
+    statView === 'player1' ? statsData.player1Stats :
+    statView === 'player2' ? statsData.player2Stats :
+    statsData.stats;
 
   // Definir las categorías disponibles por tipo de tab
   const skillCategories = {
@@ -34,27 +45,83 @@ const VolleyballStats = () => {
 
   const handleReset = () => {
     if (window.confirm('¿Está seguro de que desea reiniciar las estadísticas?')) {
-      setStats({
-        doublePositive: 0,
-        positive: 0,
-        overpass: 0,
-        negative: 0,
-        doubleNegative: 0
-      });
+      // Resetear las estadísticas del jugador seleccionado o totales
+      if (statView === 'player1' || statView === 'player2') {
+        const playerKey = statView === 'player1' ? 'player1Stats' : 'player2Stats';
+        setStatsData(prev => ({
+          ...prev,
+          [playerKey]: {
+            doublePositive: 0,
+            positive: 0,
+            overpass: 0,
+            negative: 0,
+            doubleNegative: 0
+          }
+        }));
+      } else {
+        // Resetear totales
+        setStatsData(prev => ({
+          ...prev,
+          stats: {
+            doublePositive: 0,
+            positive: 0,
+            overpass: 0,
+            negative: 0,
+            doubleNegative: 0
+          },
+          player1Stats: {
+            doublePositive: 0,
+            positive: 0,
+            overpass: 0,
+            negative: 0,
+            doubleNegative: 0
+          },
+          player2Stats: {
+            doublePositive: 0,
+            positive: 0,
+            overpass: 0,
+            negative: 0,
+            doubleNegative: 0
+          }
+        }));
+      }
     }
   };
 
-  const calculateTotalActions = () => Object.values(stats).reduce((a, b) => a + b, 0);
+  // Función para actualizar las estadísticas de un jugador específico
+  const handleStatChange = (statType, value) => {
+    if (selectedPlayer === null) {
+      // Actualizar ambos jugadores
+      updatePlayerStat(1, statType, value);
+      updatePlayerStat(2, statType, value);
+      
+      // Registrar acción para ambos jugadores
+      if (value > 0) {
+        addTimelineAction(1, statType, selectedSkill);
+        addTimelineAction(2, statType, selectedSkill);
+      }
+    } else {
+      // Actualizar solo el jugador seleccionado
+      updatePlayerStat(selectedPlayer, statType, value);
+      
+      // Registrar acción solo si estamos añadiendo (no restando)
+      if (value > 0) {
+        addTimelineAction(selectedPlayer, statType, selectedSkill);
+      }
+    }
+  };
+
+  const calculateTotalActions = () => Object.values(currentStats).reduce((a, b) => a + b, 0);
 
   const calculateEfficiency = () => {
     const total = calculateTotalActions();
     if (total === 0) return 0;
     const weightedSum = (
-      stats.doublePositive * 4 +
-      stats.positive * 2 +
-      stats.overpass * 0 +
-      stats.negative * -2 +
-      stats.doubleNegative * -4
+      currentStats.doublePositive * 4 +
+      currentStats.positive * 2 +
+      currentStats.overpass * 0 +
+      currentStats.negative * -2 +
+      currentStats.doubleNegative * -4
     );
     return ((weightedSum / (total * 4)) * 100).toFixed(2);
   };
@@ -62,7 +129,7 @@ const VolleyballStats = () => {
   const calculateEffectiveness = () => {
     const total = calculateTotalActions();
     if (total === 0) return 0;
-    return (((stats.doublePositive + stats.positive) / total) * 100).toFixed(2);
+    return (((currentStats.doublePositive + currentStats.positive) / total) * 100).toFixed(2);
   };
 
   const handleDownloadPDF = async () => {
@@ -92,21 +159,23 @@ const VolleyballStats = () => {
       doc.text([
         `Fecha: ${format(new Date(date), "PPP", { locale: es })}`,
         `Nombre/Equipo: ${name}`,
-        `Fundamento: ${selectedSkill}`
+        `Fundamento: ${selectedSkill}`,
+        `Set: ${matchData.currentSet}`,
+        `Marcador: ${matchData.teamScore} - ${matchData.opponentScore}`
       ], 15, 25);
   
-      // Estadísticas
+      // Estadísticas totales
       doc.setFontSize(12);
-      doc.text('Estadísticas:', 15, 45);
+      doc.text('Estadísticas del Equipo:', 15, 45);
       doc.setFontSize(10);
       
       const stats_text = [
         `Total de Acciones: ${calculateTotalActions()}`,
-        `Doble Positivo (##): ${stats.doublePositive}`,
-        `Positivo (+): ${stats.positive}`,
-        `Overpass (/): ${stats.overpass}`,
-        `Negativo (-): ${stats.negative}`,
-        `Doble Negativo (=): ${stats.doubleNegative}`,
+        `Doble Positivo (##): ${statsData.stats.doublePositive}`,
+        `Positivo (+): ${statsData.stats.positive}`,
+        `Overpass (/): ${statsData.stats.overpass}`,
+        `Negativo (-): ${statsData.stats.negative}`,
+        `Doble Negativo (=): ${statsData.stats.doubleNegative}`,
         '',
         `Eficiencia: ${calculateEfficiency()}%`,
         `Eficacia: ${calculateEffectiveness()}%`
@@ -114,12 +183,43 @@ const VolleyballStats = () => {
       
       doc.text(stats_text, 15, 55);
   
+      // Estadísticas por jugador
+      doc.setFontSize(12);
+      doc.text('Jugador 1:', 15, 85);
+      doc.setFontSize(10);
+      
+      const player1_stats = [
+        `Total de Acciones: ${Object.values(statsData.player1Stats).reduce((a, b) => a + b, 0)}`,
+        `Doble Positivo (##): ${statsData.player1Stats.doublePositive}`,
+        `Positivo (+): ${statsData.player1Stats.positive}`,
+        `Overpass (/): ${statsData.player1Stats.overpass}`,
+        `Negativo (-): ${statsData.player1Stats.negative}`,
+        `Doble Negativo (=): ${statsData.player1Stats.doubleNegative}`
+      ];
+      
+      doc.text(player1_stats, 15, 95);
+      
+      doc.setFontSize(12);
+      doc.text('Jugador 2:', 15, 115);
+      doc.setFontSize(10);
+      
+      const player2_stats = [
+        `Total de Acciones: ${Object.values(statsData.player2Stats).reduce((a, b) => a + b, 0)}`,
+        `Doble Positivo (##): ${statsData.player2Stats.doublePositive}`,
+        `Positivo (+): ${statsData.player2Stats.positive}`,
+        `Overpass (/): ${statsData.player2Stats.overpass}`,
+        `Negativo (-): ${statsData.player2Stats.negative}`,
+        `Doble Negativo (=): ${statsData.player2Stats.doubleNegative}`
+      ];
+      
+      doc.text(player2_stats, 15, 125);
+      
       // Gráfico de barras
       const chartDiv = chartRef.current;
       if (chartDiv) {
         const chartImage = await html2canvas(chartDiv);
         const chartData = chartImage.toDataURL('image/png');
-        doc.addImage(chartData, 'PNG', 15, 95, pageWidth - 30, pageHeight * 0.25);
+        doc.addImage(chartData, 'PNG', 15, 145, pageWidth - 30, pageHeight * 0.25);
       }
 
       // Criterios de evaluación según el fundamento seleccionado
@@ -173,19 +273,14 @@ const VolleyballStats = () => {
   };
 
   // Guardar el estado en el contexto
-  const saveStats = () => {
-    setStatsData({
+  useEffect(() => {
+    setStatsData(prev => ({
+      ...prev,
       date,
       name,
-      selectedSkill,
-      stats
-    });
-  };
-
-  // Actualizar el contexto cuando cambien los datos relevantes
-  useEffect(() => {
-    saveStats();
-  }, [date, name, selectedSkill, stats]);
+      selectedSkill
+    }));
+  }, [date, name, selectedSkill]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-400 to-blue-600 p-2 sm:p-4 md:p-6">
@@ -265,6 +360,53 @@ const VolleyballStats = () => {
               </div>
             </div>
 
+            {/* Marcador y Sets */}
+            <ScoreKeeper />
+
+            {/* Selector de Jugador y Vista de Estadísticas */}
+            <div className="flex flex-wrap items-center justify-between gap-2 py-2 px-3 bg-gray-50 rounded-lg">
+              <PlayerSelector 
+                selectedPlayer={selectedPlayer} 
+                onSelectPlayer={setSelectedPlayer} 
+              />
+              
+              <div className="flex rounded overflow-hidden border">
+                <button
+                  onClick={() => setStatView('total')}
+                  className={`px-3 py-1.5 text-xs ${
+                    statView === 'total' 
+                      ? 'bg-purple-500 text-white' 
+                      : 'bg-white text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <Users className="h-3 w-3 inline mr-1" />
+                  Equipo
+                </button>
+                <button
+                  onClick={() => setStatView('player1')}
+                  className={`px-3 py-1.5 text-xs ${
+                    statView === 'player1' 
+                      ? 'bg-blue-500 text-white' 
+                      : 'bg-white text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <User className="h-3 w-3 inline mr-1" />
+                  Jugador 1
+                </button>
+                <button
+                  onClick={() => setStatView('player2')}
+                  className={`px-3 py-1.5 text-xs ${
+                    statView === 'player2' 
+                      ? 'bg-green-500 text-white' 
+                      : 'bg-white text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <User className="h-3 w-3 inline mr-1" />
+                  Jugador 2
+                </button>
+              </div>
+            </div>
+
             {/* Botones para estadísticas */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-4">
               {[
@@ -279,24 +421,18 @@ const VolleyballStats = () => {
                   <div className="flex items-center space-x-1 sm:space-x-2">
                     <button
                       type="button"
-                      onClick={() => setStats(prev => ({
-                        ...prev,
-                        [key]: Math.max(0, prev[key] - 1)
-                      }))}
+                      onClick={() => handleStatChange(key, -1)}
                       className="p-1 hover:bg-gray-100 rounded-full"
                       style={{ color }}
                     >
                       <ArrowDownCircle className="h-4 w-4 sm:h-5 sm:w-5" />
                     </button>
                     <span className="w-6 sm:w-8 text-center font-bold text-sm sm:text-base" style={{ color }}>
-                      {stats[key]}
+                      {currentStats[key]}
                     </span>
                     <button
                       type="button"
-                      onClick={() => setStats(prev => ({
-                        ...prev,
-                        [key]: prev[key] + 1
-                      }))}
+                      onClick={() => handleStatChange(key, 1)}
                       className="p-1 hover:bg-gray-100 rounded-full"
                       style={{ color }}
                     >
@@ -312,11 +448,11 @@ const VolleyballStats = () => {
               <div className="bg-white p-4 rounded-lg h-[300px] sm:h-[400px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={[
-                    { name: '##', value: stats.doublePositive, color: '#22c55e' },
-                    { name: '+', value: stats.positive, color: '#3b82f6' },
-                    { name: '/', value: stats.overpass, color: '#f59e0b' },
-                    { name: '-', value: stats.negative, color: '#ef4444' },
-                    { name: '=', value: stats.doubleNegative, color: '#7f1d1d' }
+                    { name: '##', value: currentStats.doublePositive, color: '#22c55e' },
+                    { name: '+', value: currentStats.positive, color: '#3b82f6' },
+                    { name: '/', value: currentStats.overpass, color: '#f59e0b' },
+                    { name: '-', value: currentStats.negative, color: '#ef4444' },
+                    { name: '=', value: currentStats.doubleNegative, color: '#7f1d1d' }
                   ]}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" />
@@ -340,7 +476,9 @@ const VolleyballStats = () => {
 
             {/* Resultados */}
             <div className="bg-blue-50 p-4 rounded-lg">
-              <h3 className="text-lg font-semibold mb-2">Resultado</h3>
+              <h3 className="text-lg font-semibold mb-2">
+                Resultados {statView === 'player1' ? '(Jugador 1)' : statView === 'player2' ? '(Jugador 2)' : '(Equipo)'}
+              </h3>
               <div className="space-y-2">
                 <p className="text-sm font-medium">
                   Total de Acciones: <span className="text-blue-600">{calculateTotalActions()}</span>
@@ -351,6 +489,9 @@ const VolleyballStats = () => {
                 </div>
               </div>
             </div>
+            
+            {/* Línea de tiempo de acciones */}
+            <ActionTimeline />
             
             {/* Criterios de Evaluación */}
             <div className="mt-4">
