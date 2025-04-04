@@ -57,7 +57,7 @@ const EvaluationCriteria = () => {
         className="flex justify-between items-center p-3 bg-blue-600 text-white cursor-pointer"
         onClick={() => setExpanded(!expanded)}
       >
-        <h3 className="font-medium">Criterios de Evaluación</h3>
+        <h3 className="font-medium">Criterios de evaluación</h3>
         {expanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
       </div>
       

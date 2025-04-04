@@ -340,7 +340,7 @@ const VolleyballStats = () => {
 
             {/* Resultados */}
             <div className="bg-blue-50 p-4 rounded-lg">
-              <h3 className="text-lg font-semibold mb-2">Resultados</h3>
+              <h3 className="text-lg font-semibold mb-2">Resultado</h3>
               <div className="space-y-2">
                 <p className="text-sm font-medium">
                   Total de Acciones: <span className="text-blue-600">{calculateTotalActions()}</span>

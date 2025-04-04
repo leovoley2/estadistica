@@ -290,7 +290,7 @@ const VolleyballTrends = () => {
             </div>
             
             <div className="flex-grow">
-              <label className="block text-xs font-medium text-gray-700 mb-1">Fundamento</label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Acción</label>
               <input
                 type="text"
                 value={selectedSkill}
