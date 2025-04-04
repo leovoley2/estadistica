@@ -31,12 +31,13 @@ const getHeatMapColor = (intensity, colorType) => {
 
 const VolleyballTrends = () => {
   const navigate = useNavigate();
-  const { trendsData, setTrendsData } = useVolleyball();
+  const { statsData, trendsData, setTrendsData } = useVolleyball();
   const deviceSize = useDeviceSize();
   const canvasRef = useRef(null);
   const [heatmap, setHeatmap] = useState(new Map());
   const [heatmapColor, setHeatmapColor] = useState('red');
-  const [teamName, setTeamName] = useState(trendsData.teamName || '');
+  const [teamName, setTeamName] = useState(trendsData.teamName || statsData.name || '');
+  const [selectedSkill, setSelectedSkill] = useState(statsData.selectedSkill || '');
 
   const getCourtDimensions = () => {
     const isMobile = window.innerWidth < 768;
@@ -220,13 +221,14 @@ const VolleyballTrends = () => {
       // Título
       doc.setFontSize(24);
       doc.setTextColor(0, 0, 255);
-      doc.text('Análisis de Tendencias - Voleibol de Playa', pageWidth/2, 20, { align: 'center' });
+      doc.text('Mapa de Calor - Voleibol de Playa', pageWidth/2, 20, { align: 'center' });
       
       // Información del equipo
       doc.setFontSize(12);
       doc.setTextColor(0, 0, 0);
       doc.text([
         `Equipo: ${teamName}`,
+        `Fundamento: ${selectedSkill}`,
         `Fecha: ${format(new Date(), "PPP", { locale: es })}`
       ], 20, 35);
 
@@ -242,102 +244,106 @@ const VolleyballTrends = () => {
         doc.addImage(canvasImage, 'PNG', xPos, yPos, imgWidth, imgHeight);
       }
 
-      doc.save(`tendencias-${teamName.replace(/\s+/g, '-')}-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+      doc.save(`mapa-calor-${teamName.replace(/\s+/g, '-')}-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
     } catch (error) {
       console.error('Error al generar el PDF:', error);
       alert('Error al generar el PDF. Por favor, intente nuevamente.');
     }
   };
 
-  const saveCanvasState = () => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const imageData = canvas.toDataURL('image/png');
-      setTrendsData(prev => ({
-        ...prev,
-        teamName,
-        canvasImage: imageData
-      }));
-    }
-  };
+  // Guardar estado en el contexto
+  useEffect(() => {
+    setTrendsData({
+      teamName,
+      selectedSkill
+    });
+  }, [teamName, selectedSkill]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-400 to-blue-600 p-2 sm:p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
         <div className="bg-white bg-opacity-90 rounded-lg shadow-lg p-3 sm:p-4 md:p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div className="flex items-center">
-              <button
-                type="button"
-                onClick={() => navigate('/')}
-                className="flex items-center text-blue-600 hover:text-blue-800 transition-colors"
-              >
-                <ArrowLeft className="h-5 w-5 mr-2" />
-                Volver
-              </button>
-            </div>
+          <div className="flex items-center justify-between mb-4">
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="flex items-center text-blue-600 hover:text-blue-800 transition-colors"
+            >
+              <ArrowLeft className="h-5 w-5 mr-2" />
+              Volver a Estadísticas
+            </button>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-600">
+              Mapa de Calor
+            </h1>
+          </div>
 
-            <div className="text-center">
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-600">
-                Tendencias de Juego
-              </h1>
-            </div>
-
-            <div className="flex justify-end items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2 mb-4 p-2 bg-white bg-opacity-50 rounded-md">
+            <div className="flex-grow">
+              <label className="block text-xs font-medium text-gray-700 mb-1">Equipo</label>
               <input
                 type="text"
                 value={teamName}
                 onChange={(e) => setTeamName(e.target.value)}
                 placeholder="Nombre del equipo"
-                className="flex-grow px-3 py-2 border rounded-md"
+                className="flex-grow px-3 py-2 border rounded-md w-full sm:w-64"
               />
+            </div>
+            
+            <div className="flex-grow">
+              <label className="block text-xs font-medium text-gray-700 mb-1">Fundamento</label>
+              <input
+                type="text"
+                value={selectedSkill}
+                onChange={(e) => setSelectedSkill(e.target.value)}
+                placeholder="Fundamento analizado"
+                className="flex-grow px-3 py-2 border rounded-md w-full sm:w-64"
+              />
+            </div>
+
+            <div className="flex items-center space-x-2 mt-5">
+              <span className="text-xs font-medium text-gray-700 whitespace-nowrap">Color:</span>
+              <button
+                type="button"
+                onClick={() => setHeatmapColor('red')}
+                className={`w-6 h-6 rounded-full ${
+                  heatmapColor === 'red' 
+                    ? 'ring-2 ring-offset-1 ring-red-500' 
+                    : ''
+                } bg-red-500`}
+              />
+              <button
+                type="button"
+                onClick={() => setHeatmapColor('blue')}
+                className={`w-6 h-6 rounded-full ${
+                  heatmapColor === 'blue' 
+                    ? 'ring-2 ring-offset-1 ring-blue-500' 
+                    : ''
+                } bg-blue-500`}
+              />
+            </div>
+
+            <div className="flex space-x-2 mt-5 ml-auto">
+              <button
+                type="button"
+                onClick={handleReset}
+                className="px-3 py-1.5 text-sm bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
+              >
+                Limpiar
+              </button>
               <button
                 type="button"
                 onClick={handleDownloadPDF}
                 disabled={!teamName.trim()}
-                className={`flex items-center px-4 py-2 rounded-md transition-colors ${
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
                   !teamName.trim()
                     ? 'bg-gray-300 cursor-not-allowed'
                     : 'bg-blue-500 hover:bg-blue-600 text-white'
                 }`}
               >
-                <Download className="h-5 w-5 mr-2" />
+                <Download className="h-4 w-4 inline mr-1" />
                 PDF
               </button>
             </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2 mb-4 p-2 bg-white bg-opacity-50 rounded-md">
-            <div className="flex items-center space-x-4">
-              <span className="text-sm font-medium">Color del mapa de calor:</span>
-              <div className="flex space-x-2">
-                <button
-                  type="button"
-                  onClick={() => setHeatmapColor('red')}
-                  className={`w-8 h-8 rounded-full ${
-                    heatmapColor === 'red' 
-                      ? 'ring-2 ring-offset-2 ring-red-500' 
-                      : ''
-                  } bg-red-500`}
-                />
-                <button
-                  type="button"
-                  onClick={() => setHeatmapColor('blue')}
-                  className={`w-8 h-8 rounded-full ${
-                    heatmapColor === 'blue' 
-                      ? 'ring-2 ring-offset-2 ring-blue-500' 
-                      : ''
-                  } bg-blue-500`}
-                />
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={handleReset}
-              className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors ml-auto"
-            >
-              Limpiar
-            </button>
           </div>
           
           <div className={`w-full ${deviceSize.isMobile ? 'h-[75vh]' : 'h-[50vh]'} bg-white rounded-lg shadow-inner p-4`}>

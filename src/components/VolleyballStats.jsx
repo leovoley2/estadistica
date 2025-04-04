@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { ArrowUpCircle, ArrowDownCircle, RotateCcw, Download, TrendingUp } from 'lucide-react';
 import { jsPDF } from 'jspdf';
@@ -7,40 +7,15 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useNavigate } from 'react-router-dom';
 import { useVolleyball } from '../context/VolleyballContext';
-import { useDeviceSize } from '../hooks/useDeviceSize';
-import { setupHighDPI } from '../utils/canvas-utils';
-
-const HEATMAP_COLORS = {
-  red: [
-    'rgba(255, 0, 0, 0.3)',
-    'rgba(255, 0, 0, 0.4)',
-    'rgba(255, 0, 0, 0.5)',
-    'rgba(255, 0, 0, 0.6)'
-  ],
-  blue: [
-    'rgba(0, 0, 255, 0.3)',
-    'rgba(0, 0, 255, 0.4)',
-    'rgba(0, 0, 255, 0.5)',
-    'rgba(0, 0, 255, 0.6)'
-  ]
-};
-
-const getHeatMapColor = (intensity, colorType) => {
-  const colors = HEATMAP_COLORS[colorType];
-  const index = Math.min(Math.floor(intensity * colors.length), colors.length - 1);
-  return colors[index];
-};
 
 const VolleyballStats = () => {
   const navigate = useNavigate();
   const { statsData, setStatsData } = useVolleyball();
-  const deviceSize = useDeviceSize();
-  const canvasRef = useRef(null);
   const chartRef = useRef(null);
-  const [heatmap, setHeatmap] = useState(new Map());
-  const [heatmapColor, setHeatmapColor] = useState('red');
+  
   const [date, setDate] = useState(statsData.date || '');
   const [name, setName] = useState(statsData.name || '');
+  const [activeTab, setActiveTab] = useState('fundamentos');
   const [selectedSkill, setSelectedSkill] = useState(statsData.selectedSkill || '');
   const [stats, setStats] = useState(statsData.stats || {
     doublePositive: 0,
@@ -50,146 +25,14 @@ const VolleyballStats = () => {
     doubleNegative: 0
   });
 
-  const skills = ['K1', 'K2', 'Recepción', 'Armado', 'Ataque'];
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const handleResize = () => {
-      const container = canvas.parentElement;
-      
-      // Siempre mantenemos proporción vertical 2:3
-      let canvasWidth = container.clientWidth;
-      let canvasHeight = canvasWidth * 1.5;
-
-      // Ajustamos altura máxima según el dispositivo
-      const maxHeight = window.innerHeight * 0.7; // 70% del viewport
-      if (canvasHeight > maxHeight) {
-        canvasHeight = maxHeight;
-        canvasWidth = canvasHeight / 1.5;
-      }
-
-      canvas.width = canvasWidth;
-      canvas.height = canvasHeight;
-      
-      setupHighDPI(canvas, canvas.getContext('2d'));
-      drawCourt();
-    };
-
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [deviceSize, heatmap, heatmapColor]);
-
-  const drawCourt = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const context = canvas.getContext('2d');
-    
-    // Calculamos las dimensiones de la cancha
-    const padding = Math.max(10, canvas.width * 0.05);
-    const courtWidth = canvas.width - (padding * 2);
-    const courtHeight = canvas.height - (padding * 2);
-    
-    const startX = padding;
-    const startY = padding;
-
-    // Limpiamos el canvas
-    context.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Fondo de la cancha
-    const gradient = context.createLinearGradient(0, 0, 0, canvas.height);
-    gradient.addColorStop(0, '#f4d03f');
-    gradient.addColorStop(1, '#f4c778');
-    context.fillStyle = gradient;
-    context.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Textura de la arena
-    context.fillStyle = '#e6c88e';
-    const grainSize = Math.max(1, Math.floor(canvas.width / 200));
-    for (let i = 0; i < canvas.width; i += grainSize * 2) {
-      for (let j = 0; j < canvas.height; j += grainSize * 2) {
-        if (Math.random() > 0.5) {
-          context.fillRect(i, j, grainSize, grainSize);
-        }
-      }
-    }
-
-    // Borde de la cancha
-    context.strokeStyle = '#000080';
-    context.lineWidth = Math.max(2, canvas.width * 0.004);
-    context.strokeRect(startX, startY, courtWidth, courtHeight);
-
-    // Red horizontal
-    const netY = startY + courtHeight / 2;
-    const netWidth = courtWidth + padding;
-    const netX = startX - padding/2;
-    
-    context.beginPath();
-    context.strokeStyle = '#666666';
-    context.lineWidth = Math.max(2, canvas.width * 0.006);
-    context.moveTo(netX, netY);
-    context.lineTo(netX + netWidth, netY);
-    context.stroke();
-
-    // Detalles de la red
-    const netSpacing = Math.max(8, courtWidth / 30);
-    context.lineWidth = Math.max(1, canvas.width * 0.002);
-    for (let x = netX; x <= netX + netWidth; x += netSpacing) {
-      context.beginPath();
-      context.moveTo(x, netY - 4);
-      context.lineTo(x, netY + 4);
-      context.stroke();
-    }
-
-    // Dibujar el mapa de calor
-    heatmap.forEach((value, key) => {
-      const [x, y] = key.split(',').map(Number);
-      const radius = Math.min(
-        30,
-        Math.max(15, canvas.width * 0.03)
-      );
-      
-      const heatGradient = context.createRadialGradient(x, y, 0, x, y, radius);
-      heatGradient.addColorStop(0, getHeatMapColor(value.intensity, value.color));
-      heatGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      
-      context.fillStyle = heatGradient;
-      context.beginPath();
-      context.arc(x, y, radius, 0, Math.PI * 2);
-      context.fill();
-    });
-  };
-
-  const handleCanvasClick = (event) => {
-    event.preventDefault();
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-  
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const x = ((event.touches ? event.touches[0].clientX : event.clientX) - rect.left) * scaleX;
-    const y = ((event.touches ? event.touches[0].clientY : event.clientY) - rect.top) * scaleY;
-  
-    const key = `${x},${y}`;
-    const newHeatmap = new Map(heatmap);
-    const currentValue = heatmap.get(key);
-    
-    newHeatmap.set(key, {
-      intensity: Math.min((currentValue?.intensity || 0) + 0.25, 1),
-      color: heatmapColor
-    });
-    
-    setHeatmap(newHeatmap);
-    drawCourt();
+  // Definir las categorías disponibles por tipo de tab
+  const skillCategories = {
+    fundamentos: ['Recepción', 'Armado', 'Defensa', 'Ataque'],
+    fases: ['K1', 'K2']
   };
 
   const handleReset = () => {
-    if (window.confirm('¿Está seguro de que desea reiniciar las estadísticas y el mapa de calor?')) {
-      setHeatmap(new Map());
+    if (window.confirm('¿Está seguro de que desea reiniciar las estadísticas?')) {
       setStats({
         doublePositive: 0,
         positive: 0,
@@ -197,7 +40,6 @@ const VolleyballStats = () => {
         negative: 0,
         doubleNegative: 0
       });
-      drawCourt();
     }
   };
 
@@ -230,7 +72,7 @@ const VolleyballStats = () => {
   
     try {
       const doc = new jsPDF({
-        orientation: 'landscape',
+        orientation: 'portrait',
         unit: 'mm',
         format: 'a4'
       });
@@ -239,23 +81,23 @@ const VolleyballStats = () => {
       const pageHeight = doc.internal.pageSize.getHeight();
       
       // Título
-      doc.setFontSize(24);
+      doc.setFontSize(18);
       doc.setTextColor(0, 0, 255);
-      doc.text('Estadísticas de Voleibol de Playa', pageWidth/2, 20, { align: 'center' });
+      doc.text('Estadísticas de Voleibol de Playa', pageWidth/2, 15, { align: 'center' });
       
       // Información básica
-      doc.setFontSize(12);
+      doc.setFontSize(10);
       doc.setTextColor(0, 0, 0);
       doc.text([
         `Fecha: ${format(new Date(date), "PPP", { locale: es })}`,
         `Nombre/Equipo: ${name}`,
         `Fundamento: ${selectedSkill}`
-      ], 20, 35);
+      ], 15, 25);
   
       // Estadísticas
-      doc.setFontSize(14);
-      doc.text('Estadísticas:', 20, 55);
       doc.setFontSize(12);
+      doc.text('Estadísticas:', 15, 45);
+      doc.setFontSize(10);
       
       const stats_text = [
         `Total de Acciones: ${calculateTotalActions()}`,
@@ -269,29 +111,14 @@ const VolleyballStats = () => {
         `Eficacia: ${calculateEffectiveness()}%`
       ];
       
-      doc.text(stats_text, 20, 65);
+      doc.text(stats_text, 15, 55);
   
       // Gráfico de barras
       const chartDiv = chartRef.current;
       if (chartDiv) {
         const chartImage = await html2canvas(chartDiv);
         const chartData = chartImage.toDataURL('image/png');
-        doc.addImage(chartData, 'PNG', 20, 120, pageWidth * 0.4, pageHeight * 0.3);
-      }
-  
-      // Cancha con mapa de calor
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const canvasImage = canvas.toDataURL('image/png');
-        const maxDimension = Math.min(pageWidth * 0.4, pageHeight * 0.6);
-        doc.addImage(
-          canvasImage,
-          'PNG',
-          pageWidth * 0.55,
-          pageHeight * 0.2,
-          maxDimension * 0.67, // Ajustado para proporción vertical
-          maxDimension
-        );
+        doc.addImage(chartData, 'PNG', 15, 100, pageWidth - 30, pageHeight * 0.3);
       }
   
       doc.save(`estadisticas-${name}-${date}.pdf`);
@@ -300,6 +127,21 @@ const VolleyballStats = () => {
       alert('Error al generar el PDF. Por favor, intente nuevamente.');
     }
   };
+
+  // Guardar el estado en el contexto
+  const saveStats = () => {
+    setStatsData({
+      date,
+      name,
+      selectedSkill,
+      stats
+    });
+  };
+
+  // Actualizar el contexto cuando cambien los datos relevantes
+  React.useEffect(() => {
+    saveStats();
+  }, [date, name, selectedSkill, stats]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-400 to-blue-600 p-2 sm:p-4 md:p-6">
@@ -310,43 +152,76 @@ const VolleyballStats = () => {
           </h1>
           
           <form onSubmit={(e) => e.preventDefault()} className="space-y-4 sm:space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">Fecha</label>
+            {/* Fila de información básica más compacta */}
+            <div className="flex flex-wrap gap-2 sm:gap-4">
+              <div className="flex-grow min-w-[120px] max-w-[200px]">
+                <label className="block text-xs font-medium text-gray-700 mb-1">Fecha</label>
                 <input
                   type="date"
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
-                  className="w-full p-2 border rounded-md"
+                  className="w-full p-1.5 border rounded-md text-sm"
                 />
               </div>
 
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">Nombre/Equipo</label>
+              <div className="flex-grow min-w-[150px]">
+                <label className="block text-xs font-medium text-gray-700 mb-1">Nombre/Equipo</label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full p-2 border rounded-md"
+                  className="w-full p-1.5 border rounded-md text-sm"
                   placeholder="Ingrese nombre o equipo"
                 />
               </div>
 
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">Fundamento</label>
-                <select
-                  value={selectedSkill}
-                  onChange={(e) => setSelectedSkill(e.target.value)}
-                  className="w-full p-2 border rounded-md"
-                >
-                  <option value="">Seleccione fundamento</option>
-                  {skills.map((skill) => (
-                    <option key={skill} value={skill}>{skill}</option>
+              {/* Pestañas para tipo de fundamento */}
+              <div className="flex-grow min-w-[300px]">
+                <div className="flex mb-1">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('fundamentos')}
+                    className={`flex-1 px-3 py-1.5 text-sm font-medium rounded-t-md transition-colors ${
+                      activeTab === 'fundamentos'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-100 hover:bg-gray-200'
+                    }`}
+                  >
+                    Fundamentos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('fases')}
+                    className={`flex-1 px-3 py-1.5 text-sm font-medium rounded-t-md transition-colors ${
+                      activeTab === 'fases'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-100 hover:bg-gray-200'
+                    }`}
+                  >
+                    Fases
+                  </button>
+                </div>
+
+                <div className="flex gap-1 p-1 border rounded-md bg-white">
+                  {skillCategories[activeTab].map((skill) => (
+                    <button
+                      key={skill}
+                      type="button"
+                      onClick={() => setSelectedSkill(skill)}
+                      className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors ${
+                        selectedSkill === skill
+                          ? 'bg-blue-100 text-blue-800 font-semibold'
+                          : 'hover:bg-gray-100'
+                      }`}
+                    >
+                      {skill}
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
             </div>
 
+            {/* Botones para estadísticas */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-4">
               {[
                 { key: 'doublePositive', label: '## (Doble Positivo)', color: '#22c55e' },
@@ -388,49 +263,9 @@ const VolleyballStats = () => {
               ))}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8">
-              <div className="w-full">
-                <div className="flex items-center space-x-4 mb-4">
-                  <span className="text-sm font-medium">Color del mapa de calor:</span>
-                  <div className="flex space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => setHeatmapColor('red')}
-                      className={`w-8 h-8 rounded-full ${
-                        heatmapColor === 'red' 
-                          ? 'ring-2 ring-offset-2 ring-red-500' 
-                          : ''
-                      } bg-red-500`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setHeatmapColor('blue')}
-                      className={`w-8 h-8 rounded-full ${
-                        heatmapColor === 'blue' 
-                          ? 'ring-2 ring-offset-2 ring-blue-500' 
-                          : ''
-                      } bg-blue-500`}
-                    />
-                  </div>
-                </div>
-
-                <div className="relative w-full overflow-hidden">
-                  <div className="w-full mx-auto" style={{ 
-                    paddingBottom: '150%',
-                    maxWidth: '500px'
-                  }}>
-                    <canvas
-                      ref={canvasRef}
-                      onClick={handleCanvasClick}
-                      onTouchStart={handleCanvasClick}
-                      className="absolute top-0 left-0 w-full h-full border border-gray-300 rounded-lg touch-none"
-                      style={{ touchAction: 'none' }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div ref={chartRef} className="bg-white p-4 rounded-lg h-[300px] sm:h-[400px]">
+            {/* Gráfico de estadísticas */}
+            <div className="w-full" ref={chartRef}>
+              <div className="bg-white p-4 rounded-lg h-[300px] sm:h-[400px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={[
                     { name: '##', value: stats.doublePositive, color: '#22c55e' },
@@ -459,21 +294,21 @@ const VolleyballStats = () => {
               </div>
             </div>
 
-            <div className="space-y-4">
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold mb-2">Resultados</h3>
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">
-                    Total de Acciones: <span className="text-blue-600">{calculateTotalActions()}</span>
-                  </p>
-                  <div className="border-t pt-2">
-                    <p className="text-sm">Eficiencia: <span className="font-medium">{calculateEfficiency()}%</span></p>
-                    <p className="text-sm">Eficacia: <span className="font-medium">{calculateEffectiveness()}%</span></p>
-                  </div>
+            {/* Resultados */}
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold mb-2">Resultados</h3>
+              <div className="space-y-2">
+                <p className="text-sm font-medium">
+                  Total de Acciones: <span className="text-blue-600">{calculateTotalActions()}</span>
+                </p>
+                <div className="border-t pt-2">
+                  <p className="text-sm">Eficiencia: <span className="font-medium">{calculateEfficiency()}%</span></p>
+                  <p className="text-sm">Eficacia: <span className="font-medium">{calculateEffectiveness()}%</span></p>
                 </div>
               </div>
             </div>
 
+            {/* Botones de acción */}
             <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4">
               <button
                 type="button"
@@ -489,7 +324,7 @@ const VolleyballStats = () => {
                 className="flex items-center justify-center px-3 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors text-sm sm:text-base"
               >
                 <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2" />
-                <span>Tendencias</span>
+                <span>Mapa de Calor</span>
               </button>
               <button
                 type="button"
