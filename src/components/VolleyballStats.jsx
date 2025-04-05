@@ -7,9 +7,8 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useNavigate } from 'react-router-dom';
 import { useVolleyball } from '../context/VolleyballContext';
-import EvaluationCriteria from './EvaluatioinCriteria';
+import EvaluationCriteria from './EvaluationCriteria';
 import ScoreKeeper from './ScoreKeeper';
-import PlayerSelector from './PlayerSelector';
 import ActionTimeline from './ActionTimeline';
 
 const VolleyballStats = () => {
@@ -50,6 +49,33 @@ const VolleyballStats = () => {
   const skillCategories = {
     fundamentos: ['Recepción', 'Armado', 'Defensa', 'Ataque', 'Bloqueo', 'Saque'],
     fases: ['K1', 'K2']
+  };
+
+  // Función para manejar incrementos y decrementos de estadísticas
+  const handleStatChange = (statType, value) => {
+    // Obtener el jugador seleccionado actualmente
+    const targetPlayer = selectedPlayer;
+    
+    console.log(`Actualizando estadística ${statType} por ${value} para ${
+      targetPlayer === 1 ? 'Jugador 1' : 
+      targetPlayer === 2 ? 'Jugador 2' : 
+      'Ambos'
+    }`);
+    
+    // Llamar a la función de actualización con el jugador correcto
+    updatePlayerStat(targetPlayer, statType, value);
+    
+    // Registrar en la línea de tiempo (solo para incrementos)
+    if (value > 0) {
+      if (targetPlayer === null) {
+        // Si se seleccionaron ambos jugadores, registrar para ambos
+        addTimelineAction(1, statType, selectedSkill);
+        addTimelineAction(2, statType, selectedSkill);
+      } else {
+        // Registrar solo para el jugador específico
+        addTimelineAction(targetPlayer, statType, selectedSkill);
+      }
+    }
   };
 
   const handleReset = () => {
@@ -181,35 +207,7 @@ const VolleyballStats = () => {
         }
       }
     }
-  };
-
-  // Función para actualizar las estadísticas de un jugador específico
-  const handleStatChange = (statType, value) => {
-    console.log(`handleStatChange llamado - Jugador: ${selectedPlayer}, Tipo: ${statType}, Valor: ${value}`);
-  
-    // Validar que tenemos un jugador seleccionado o ambos
-    if (selectedPlayer === 1 || selectedPlayer === 2 || selectedPlayer === null) {
-      // Actualizar la estadística para el jugador seleccionado
-      updatePlayerStat(selectedPlayer, statType, value);
-      
-      // Solo registrar en la línea de tiempo cuando incrementamos (no cuando decrementamos)
-      if (value > 0) {
-        if (selectedPlayer === null) {
-          // Si están seleccionados ambos jugadores, registrar para ambos
-          addTimelineAction(1, statType, selectedSkill);
-          addTimelineAction(2, statType, selectedSkill);
-        } else {
-          // Registrar solo para el jugador específico
-          addTimelineAction(selectedPlayer, statType, selectedSkill);
-        }
-      }
-    } else {
-      console.warn("No hay un jugador válido seleccionado");
-      // Podríamos mostrar aquí un mensaje de alerta si queremos
-    }
-  };
-
-  const calculateTotalActions = () => Object.values(currentStats).reduce((a, b) => a + b, 0);
+  };const calculateTotalActions = () => Object.values(currentStats).reduce((a, b) => a + b, 0);
 
   const calculateEfficiency = () => {
     const total = calculateTotalActions();
@@ -266,6 +264,48 @@ const VolleyballStats = () => {
     });
   };
 
+  // Componente para los botones de estadísticas
+  const StatButton = ({ statType, label, color }) => {
+    return (
+      <div className={`flex flex-col items-center p-2 rounded-lg border-2 ${
+        selectedPlayer === 1 ? 'border-blue-200' :
+        selectedPlayer === 2 ? 'border-green-200' :
+        'border-purple-200'
+      } bg-white hover:bg-gray-50`}>
+        <span className="text-sm font-medium mb-1 text-center">{label}</span>
+        <div className="flex items-center">
+          <button
+            type="button"
+            onClick={() => handleStatChange(statType, -1)}
+            className={`p-2 rounded-l-lg ${
+              selectedPlayer === 1 ? 'hover:bg-blue-100' :
+              selectedPlayer === 2 ? 'hover:bg-green-100' :
+              'hover:bg-purple-100'
+            }`}
+            style={{ color }}
+          >
+            <ArrowDownCircle className="h-5 w-5" />
+          </button>
+          <div className="px-3 py-1 font-bold text-base" style={{ color }}>
+            {currentStats[statType]}
+          </div>
+          <button
+            type="button"
+            onClick={() => handleStatChange(statType, 1)}
+            className={`p-2 rounded-r-lg ${
+              selectedPlayer === 1 ? 'hover:bg-blue-100' :
+              selectedPlayer === 2 ? 'hover:bg-green-100' :
+              'hover:bg-purple-100'
+            }`}
+            style={{ color }}
+          >
+            <ArrowUpCircle className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   const handleDownloadPDF = async () => {
     if (!name || !date || !selectedSkill) {
       alert('Por favor, complete todos los campos antes de descargar el PDF');
@@ -312,9 +352,7 @@ const VolleyballStats = () => {
         `Doble Negativo (=): ${statsData.stats.doubleNegative}`,
       ];
       
-      doc.text(stats_text, 15, 55);
-      
-      // Estadísticas por sets
+      doc.text(stats_text, 15, 55);// Estadísticas por sets
       let yPos = 75;
       
       // Título de la sección
@@ -443,9 +481,7 @@ const VolleyballStats = () => {
       name,
       selectedSkill
     }));
-  }, [date, name, selectedSkill]);
-
-  return (
+  }, [date, name, selectedSkill]);return (
     <div className="min-h-screen bg-gradient-to-b from-blue-400 to-blue-600 p-2 sm:p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
         <div className="bg-white bg-opacity-90 rounded-lg shadow-lg p-3 sm:p-4 md:p-6">
@@ -526,83 +562,61 @@ const VolleyballStats = () => {
             {/* Marcador y Sets */}
             <ScoreKeeper />
 
-            {/* Selector de Jugador y Vista de Estadísticas */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-2 py-2 px-3 bg-gray-50 rounded-lg">
-              <PlayerSelector 
-                selectedPlayer={selectedPlayer} 
-                onSelectPlayer={setSelectedPlayer} 
-              />
-              
-              <div className="flex flex-col sm:flex-row items-center gap-2">
-                <div className="flex rounded overflow-hidden border">
+            {/* Selector de Jugador y Vista de Estadísticas con indicador mejorado */}
+            <div className="space-y-4">
+              {/* Selector de jugador */}
+              <div className="bg-white p-4 rounded-lg shadow-sm">
+                <h3 className="text-sm font-medium text-gray-700 mb-2">Seleccionar Jugador para Estadísticas:</h3>
+                <div className="flex gap-3">
                   <button
-                    onClick={() => setStatView('total')}
-                    className={`px-3 py-1.5 text-xs ${
-                      statView === 'total' 
-                        ? 'bg-purple-500 text-white' 
-                        : 'bg-white text-gray-700 hover:bg-gray-100'
+                    onClick={() => setSelectedPlayer(1)}
+                    className={`flex-1 flex items-center justify-center px-4 py-2 rounded-lg transition-all ${
+                      selectedPlayer === 1
+                        ? 'bg-blue-600 text-white shadow-md transform scale-105'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
-                    <Users className="h-3 w-3 inline mr-1" />
-                    Equipo
+                    <User className="h-5 w-5 mr-2" />
+                    <span className="text-sm font-medium">Jugador 1</span>
                   </button>
+                  
                   <button
-                    onClick={() => setStatView('player1')}
-                    className={`px-3 py-1.5 text-xs ${
-                      statView === 'player1' 
-                        ? 'bg-blue-500 text-white' 
-                        : 'bg-white text-gray-700 hover:bg-gray-100'
+                    onClick={() => setSelectedPlayer(2)}
+                    className={`flex-1 flex items-center justify-center px-4 py-2 rounded-lg transition-all ${
+                      selectedPlayer === 2
+                        ? 'bg-green-600 text-white shadow-md transform scale-105'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
-                    <User className="h-3 w-3 inline mr-1" />
-                    Jugador 1
+                    <User className="h-5 w-5 mr-2" />
+                    <span className="text-sm font-medium">Jugador 2</span>
                   </button>
+                  
                   <button
-                    onClick={() => setStatView('player2')}
-                    className={`px-3 py-1.5 text-xs ${
-                      statView === 'player2' 
-                        ? 'bg-green-500 text-white' 
-                        : 'bg-white text-gray-700 hover:bg-gray-100'
+                    onClick={() => setSelectedPlayer(null)}
+                    className={`flex-1 flex items-center justify-center px-4 py-2 rounded-lg transition-all ${
+                      selectedPlayer === null
+                        ? 'bg-purple-600 text-white shadow-md transform scale-105'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
-                    <User className="h-3 w-3 inline mr-1" />
-                    Jugador 2
-                  </button>
-                </div>
-                
-                <div className="flex rounded overflow-hidden border">
-                  <button
-                    onClick={() => setShowCurrentSetStats(true)}
-                    className={`px-3 py-1.5 text-xs ${
-                      showCurrentSetStats
-                        ? 'bg-blue-500 text-white' 
-                        : 'bg-white text-gray-700 hover:bg-gray-100'
-                    }`}
-                  >
-                    Set Actual
-                  </button>
-                  <button
-                    onClick={() => setShowCurrentSetStats(false)}
-                    className={`px-3 py-1.5 text-xs ${
-                      !showCurrentSetStats 
-                        ? 'bg-blue-500 text-white' 
-                        : 'bg-white text-gray-700 hover:bg-gray-100'
-                    }`}
-                  >
-                    Total Partido
+                    <Users className="h-5 w-5 mr-2" />
+                    <span className="text-sm font-medium">Ambos</span>
                   </button>
                 </div>
-              </div>
-            </div>
-                          {/* Indicador de jugador activo para estadísticas */}
-              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 mb-4 rounded">
+              </div>{/* Indicador de jugador activo */}
+              <div className={`p-3 rounded-lg ${
+                selectedPlayer === 1 ? 'bg-blue-50 border-l-4 border-blue-500' :
+                selectedPlayer === 2 ? 'bg-green-50 border-l-4 border-green-500' :
+                'bg-purple-50 border-l-4 border-purple-500'
+              }`}>
                 <div className="flex items-center">
                   {selectedPlayer === 1 && (
                     <>
                       <User className="h-6 w-6 mr-2 text-blue-600" />
                       <div>
-                        <p className="font-medium text-blue-600">Registrando estadísticas para Jugador 1</p>
-                        <p className="text-xs text-gray-600">Los incrementos/decrementos se aplicarán solo al Jugador 1</p>
+                        <p className="font-medium text-blue-600">Registrando para Jugador 1</p>
+                        <p className="text-xs text-gray-600">Los botones de estadísticas se aplicarán solo al Jugador 1</p>
                       </div>
                     </>
                   )}
@@ -611,8 +625,8 @@ const VolleyballStats = () => {
                     <>
                       <User className="h-6 w-6 mr-2 text-green-600" />
                       <div>
-                        <p className="font-medium text-green-600">Registrando estadísticas para Jugador 2</p>
-                        <p className="text-xs text-gray-600">Los incrementos/decrementos se aplicarán solo al Jugador 2</p>
+                        <p className="font-medium text-green-600">Registrando para Jugador 2</p>
+                        <p className="text-xs text-gray-600">Los botones de estadísticas se aplicarán solo al Jugador 2</p>
                       </div>
                     </>
                   )}
@@ -621,47 +635,49 @@ const VolleyballStats = () => {
                     <>
                       <Users className="h-6 w-6 mr-2 text-purple-600" />
                       <div>
-                        <p className="font-medium text-purple-600">Registrando estadísticas para ambos jugadores</p>
-                        <p className="text-xs text-gray-600">Los incrementos/decrementos se aplicarán a ambos jugadores</p>
+                        <p className="font-medium text-purple-600">Registrando para ambos jugadores</p>
+                        <p className="text-xs text-gray-600">Los botones de estadísticas se aplicarán a ambos jugadores</p>
                       </div>
                     </>
                   )}
                 </div>
               </div>
-            {/* Botones para estadísticas */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-4">
-              {[
-                { key: 'doublePositive', label: '## (Doble Positivo)', color: '#22c55e' },
-                { key: 'positive', label: '+ (Positivo)', color: '#3b82f6' },
-                { key: 'overpass', label: '/ (Overpass)', color: '#f59e0b' },
-                { key: 'negative', label: '- (Negativo)', color: '#ef4444' },
-                { key: 'doubleNegative', label: '= (Doble Negativo)', color: '#7f1d1d' }
-              ].map(({ key, label, color }) => (
-                <div key={key} className="flex flex-col items-center space-y-1 p-1 sm:p-2 bg-gray-50 rounded-lg">
-                  <span className="text-xs sm:text-sm font-medium text-center">{label}</span>
-                  <div className="flex items-center space-x-1 sm:space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => handleStatChange(key, -1)}
-                      className="p-1 hover:bg-gray-100 rounded-full"
-                      style={{ color }}
-                    >
-                      <ArrowDownCircle className="h-4 w-4 sm:h-5 sm:w-5" />
-                    </button>
-                    <span className="w-6 sm:w-8 text-center font-bold text-sm sm:text-base" style={{ color }}>
-                      {currentStats[key]}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleStatChange(key, 1)}
-                      className="p-1 hover:bg-gray-100 rounded-full"
-                      style={{ color }}
-                    >
-                      <ArrowUpCircle className="h-4 w-4 sm:h-5 sm:w-5" />
-                    </button>
-                  </div>
+              
+              {/* Selector de vista de estadísticas (total o set actual) */}
+              <div className="bg-white p-3 rounded-lg shadow-sm">
+                <h3 className="text-sm font-medium text-gray-700 mb-2">Vista de estadísticas:</h3>
+                <div className="flex rounded overflow-hidden border">
+                  <button
+                    onClick={() => setShowCurrentSetStats(true)}
+                    className={`flex-1 px-3 py-1.5 text-sm ${
+                      showCurrentSetStats
+                        ? 'bg-blue-500 text-white font-medium' 
+                        : 'bg-white text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    Set Actual ({matchData.currentSet})
+                  </button>
+                  <button
+                    onClick={() => setShowCurrentSetStats(false)}
+                    className={`flex-1 px-3 py-1.5 text-sm ${
+                      !showCurrentSetStats 
+                        ? 'bg-blue-500 text-white font-medium' 
+                        : 'bg-white text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    Total Partido
+                  </button>
                 </div>
-              ))}
+              </div>
+            </div>
+
+            {/* Botones para estadísticas */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              <StatButton statType="doublePositive" label="## (Doble Positivo)" color="#22c55e" />
+              <StatButton statType="positive" label="+ (Positivo)" color="#3b82f6" />
+              <StatButton statType="overpass" label="/ (Overpass)" color="#f59e0b" />
+              <StatButton statType="negative" label="- (Negativo)" color="#ef4444" />
+              <StatButton statType="doubleNegative" label="= (Doble Negativo)" color="#7f1d1d" />
             </div>
 
             {/* Gráfico de estadísticas */}
@@ -693,12 +709,10 @@ const VolleyballStats = () => {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-            </div>
-
-            {/* Gráfico comparativo por sets */}
+            </div>{/* Gráfico comparativo por sets */}
             <div className="w-full" ref={setChartRef}>
               <div className="bg-white p-4 rounded-lg h-[300px] sm:h-[400px]">
-              <h3 className="text-sm font-medium mb-2">Comparación de Eficiencia por Set</h3>
+                <h3 className="text-sm font-medium mb-2">Comparación de Eficiencia por Set</h3>
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={prepareSetComparisonData()}>
                     <CartesianGrid strokeDasharray="3 3" />
@@ -716,19 +730,124 @@ const VolleyballStats = () => {
               </div>
             </div>
 
-            {/* Resultados */}
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <h3 className="text-lg font-semibold mb-2">
-                Resultados {statView === 'player1' ? '(Jugador 1)' : statView === 'player2' ? '(Jugador 2)' : '(Equipo)'} - {showCurrentSetStats ? `Set ${matchData.currentSet}` : 'Partido Completo'}
-              </h3>
-              <div className="space-y-2">
-                <p className="text-sm font-medium">
-                  Total de Acciones: <span className="text-blue-600">{calculateTotalActions()}</span>
-                </p>
-                <div className="border-t pt-2">
-                  <p className="text-sm">Eficiencia: <span className="font-medium">{calculateEfficiency()}%</span></p>
-                  <p className="text-sm">Eficacia: <span className="font-medium">{calculateEffectiveness()}%</span></p>
+            {/* Vista de estadísticas por jugador */}
+            <div className="bg-white p-4 rounded-lg shadow-md">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-base font-semibold">
+                  Estadísticas {showCurrentSetStats ? `Set ${matchData.currentSet}` : 'Totales'}
+                </h3>
+                
+                <div className="flex space-x-3">
+                  <button
+                    onClick={() => setStatView('total')}
+                    className={`px-3 py-1 text-xs rounded-full ${
+                      statView === 'total' 
+                        ? 'bg-purple-100 text-purple-800 font-medium' 
+                        : 'bg-gray-100 text-gray-600'
+                    }`}
+                  >
+                    <Users className="h-3 w-3 inline mr-1" />
+                    Equipo
+                  </button>
+                  <button
+                    onClick={() => setStatView('player1')}
+                    className={`px-3 py-1 text-xs rounded-full ${
+                      statView === 'player1' 
+                        ? 'bg-blue-100 text-blue-800 font-medium' 
+                        : 'bg-gray-100 text-gray-600'
+                    }`}
+                  >
+                    <User className="h-3 w-3 inline mr-1" />
+                    Jugador 1
+                  </button>
+                  <button
+                    onClick={() => setStatView('player2')}
+                    className={`px-3 py-1 text-xs rounded-full ${
+                      statView === 'player2' 
+                        ? 'bg-green-100 text-green-800 font-medium' 
+                        : 'bg-gray-100 text-gray-600'
+                    }`}
+                  >
+                    <User className="h-3 w-3 inline mr-1" />
+                    Jugador 2
+                  </button>
                 </div>
+              </div>
+              
+              {/* Tabla de estadísticas */}
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Tipo
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Símbolo
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Cantidad
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    <tr>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Doble Positivo</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">##</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-semibold">{currentStats.doublePositive}</td>
+                    </tr>
+                    <tr>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Positivo</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">+</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-semibold">{currentStats.positive}</td>
+                    </tr>
+                    <tr>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Overpass</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">/</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-yellow-600 font-semibold">{currentStats.overpass}</td>
+                    </tr>
+                    <tr>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Negativo</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">-</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-semibold">{currentStats.negative}</td>
+                    </tr>
+                    <tr>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Doble Negativo</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">=</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-red-800 font-semibold">{currentStats.doubleNegative}</td>
+                    </tr>
+                    <tr className="bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Total Acciones</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500"></td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-bold">{calculateTotalActions()}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>{/* Resultados */}
+              <div className="mt-4 grid grid-cols-2 gap-4">
+                <div className="bg-blue-50 p-3 rounded-lg">
+                  <h4 className="font-medium text-sm text-blue-800 mb-1">Eficiencia</h4>
+                  <p className="text-2xl font-bold text-blue-600">{calculateEfficiency()}%</p>
+                  <p className="text-xs text-blue-500 mt-1">Basado en ponderación de acciones</p>
+                </div>
+                <div className="bg-green-50 p-3 rounded-lg">
+                  <h4 className="font-medium text-sm text-green-800 mb-1">Eficacia</h4>
+                  <p className="text-2xl font-bold text-green-600">{calculateEffectiveness()}%</p>
+                  <p className="text-xs text-green-500 mt-1">Acciones positivas / total</p>
+                </div>
+              </div>
+              
+              {/* Leyenda de jugador actual */}
+              <div className={`mt-4 p-3 rounded-lg text-sm ${
+                statView === 'player1' ? 'bg-blue-50 text-blue-800' :
+                statView === 'player2' ? 'bg-green-50 text-green-800' :
+                'bg-purple-50 text-purple-800'
+              }`}>
+                Visualizando estadísticas para: <span className="font-medium">
+                  {statView === 'player1' ? 'Jugador 1' :
+                  statView === 'player2' ? 'Jugador 2' :
+                  'Equipo completo'}
+                </span>
               </div>
             </div>
             

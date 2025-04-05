@@ -53,97 +53,95 @@ export const VolleyballProvider = ({ children }) => {
 
   // Métodos auxiliares para actualizar estadísticas
 
-  // Actualizar estadística de un jugador y el total
- // Reemplazo completo de la función updatePlayerStat
-
-const updatePlayerStat = (player, statType, value) => {
-  console.log(`Intentando actualizar para jugador ${player}, estadística ${statType} con valor ${value}`);
-  
-  if (player !== 1 && player !== 2 && player !== null) {
-    console.error("Error: Jugador inválido", player);
-    return;
-  }
-  
-  setStatsData(prev => {
-    // Crear copias profundas de todos los objetos de estadísticas para evitar problemas de referencia
-    const currentSetIndex = matchData.currentSet - 1;
+  // Actualizar estadística de un jugador específico
+  const updatePlayerStat = (player, statType, value) => {
+    console.log(`Actualizando jugador ${player} con ${statType} por ${value}`);
     
-    // 1. Crear copias de las estadísticas actuales
-    const newPlayerStats1 = {...prev.player1Stats};
-    const newPlayerStats2 = {...prev.player2Stats};
-    
-    // Crear una copia de todos los sets
-    const newSetStats = prev.setStats.map(set => ({
-      stats: {...set.stats},
-      player1Stats: {...set.player1Stats},
-      player2Stats: {...set.player2Stats}
-    }));
-    
-    // Asegurarse de que existe el set actual
-    if (!newSetStats[currentSetIndex]) {
-      newSetStats[currentSetIndex] = {
-        stats: {...initialStatsState},
-        player1Stats: {...initialStatsState},
-        player2Stats: {...initialStatsState}
+    setStatsData(prev => {
+      // 1. Crear copias de todos los objetos para evitar problemas de referencia
+      const newStats = { ...prev };
+      const currentSetIndex = matchData.currentSet - 1;
+      
+      // 2. Actualizar estadísticas según el jugador seleccionado
+      if (player === 1 || player === null) {
+        // Actualizar jugador 1
+        newStats.player1Stats = { 
+          ...newStats.player1Stats, 
+          [statType]: Math.max(0, newStats.player1Stats[statType] + value) 
+        };
+        
+        // Actualizar estadísticas del set actual para jugador 1
+        if (!newStats.setStats[currentSetIndex]) {
+          newStats.setStats[currentSetIndex] = {
+            stats: { ...initialStatsState },
+            player1Stats: { ...initialStatsState },
+            player2Stats: { ...initialStatsState }
+          };
+        }
+        
+        newStats.setStats[currentSetIndex] = {
+          ...newStats.setStats[currentSetIndex],
+          player1Stats: {
+            ...newStats.setStats[currentSetIndex].player1Stats,
+            [statType]: Math.max(0, newStats.setStats[currentSetIndex].player1Stats[statType] + value)
+          }
+        };
+      }
+      
+      if (player === 2 || player === null) {
+        // Actualizar jugador 2
+        newStats.player2Stats = { 
+          ...newStats.player2Stats, 
+          [statType]: Math.max(0, newStats.player2Stats[statType] + value) 
+        };
+        
+        // Actualizar estadísticas del set actual para jugador 2
+        if (!newStats.setStats[currentSetIndex]) {
+          newStats.setStats[currentSetIndex] = {
+            stats: { ...initialStatsState },
+            player1Stats: { ...initialStatsState },
+            player2Stats: { ...initialStatsState }
+          };
+        }
+        
+        newStats.setStats[currentSetIndex] = {
+          ...newStats.setStats[currentSetIndex],
+          player2Stats: {
+            ...newStats.setStats[currentSetIndex].player2Stats,
+            [statType]: Math.max(0, newStats.setStats[currentSetIndex].player2Stats[statType] + value)
+          }
+        };
+      }
+      
+      // 3. Recalcular las estadísticas totales
+      newStats.stats = {
+        doublePositive: newStats.player1Stats.doublePositive + newStats.player2Stats.doublePositive,
+        positive: newStats.player1Stats.positive + newStats.player2Stats.positive,
+        overpass: newStats.player1Stats.overpass + newStats.player2Stats.overpass,
+        negative: newStats.player1Stats.negative + newStats.player2Stats.negative,
+        doubleNegative: newStats.player1Stats.doubleNegative + newStats.player2Stats.doubleNegative
       };
-    }
-    
-    // 2. Actualizar las estadísticas específicas
-    if (player === 1 || player === null) {
-      // Actualizar stats del jugador 1
-      newPlayerStats1[statType] = Math.max(0, newPlayerStats1[statType] + value);
-      newSetStats[currentSetIndex].player1Stats[statType] = Math.max(
-        0, 
-        newSetStats[currentSetIndex].player1Stats[statType] + value
-      );
-      console.log(`Actualizando Jugador 1 - ${statType}: ${newPlayerStats1[statType]}`);
-    }
-    
-    if (player === 2 || player === null) {
-      // Actualizar stats del jugador 2
-      newPlayerStats2[statType] = Math.max(0, newPlayerStats2[statType] + value);
-      newSetStats[currentSetIndex].player2Stats[statType] = Math.max(
-        0, 
-        newSetStats[currentSetIndex].player2Stats[statType] + value
-      );
-      console.log(`Actualizando Jugador 2 - ${statType}: ${newPlayerStats2[statType]}`);
-    }
-    
-    // 3. Recalcular las estadísticas totales para el set actual
-    const setTotalStats = {
-      doublePositive: newSetStats[currentSetIndex].player1Stats.doublePositive + 
-                     newSetStats[currentSetIndex].player2Stats.doublePositive,
-      positive: newSetStats[currentSetIndex].player1Stats.positive + 
-               newSetStats[currentSetIndex].player2Stats.positive,
-      overpass: newSetStats[currentSetIndex].player1Stats.overpass + 
-               newSetStats[currentSetIndex].player2Stats.overpass,
-      negative: newSetStats[currentSetIndex].player1Stats.negative + 
-               newSetStats[currentSetIndex].player2Stats.negative,
-      doubleNegative: newSetStats[currentSetIndex].player1Stats.doubleNegative + 
-                     newSetStats[currentSetIndex].player2Stats.doubleNegative
-    };
-    
-    newSetStats[currentSetIndex].stats = setTotalStats;
-    
-    // 4. Recalcular las estadísticas totales del partido
-    const totalStats = {
-      doublePositive: newPlayerStats1.doublePositive + newPlayerStats2.doublePositive,
-      positive: newPlayerStats1.positive + newPlayerStats2.positive,
-      overpass: newPlayerStats1.overpass + newPlayerStats2.overpass,
-      negative: newPlayerStats1.negative + newPlayerStats2.negative,
-      doubleNegative: newPlayerStats1.doubleNegative + newPlayerStats2.doubleNegative
-    };
-    
-    // 5. Devolver el estado actualizado
-    return {
-      ...prev,
-      stats: totalStats,
-      player1Stats: newPlayerStats1,
-      player2Stats: newPlayerStats2,
-      setStats: newSetStats
-    };
-  });
-};
+      
+      // 4. Recalcular las estadísticas totales del set actual
+      newStats.setStats[currentSetIndex].stats = {
+        doublePositive: newStats.setStats[currentSetIndex].player1Stats.doublePositive + 
+                       newStats.setStats[currentSetIndex].player2Stats.doublePositive,
+        positive: newStats.setStats[currentSetIndex].player1Stats.positive + 
+                 newStats.setStats[currentSetIndex].player2Stats.positive,
+        overpass: newStats.setStats[currentSetIndex].player1Stats.overpass + 
+                 newStats.setStats[currentSetIndex].player2Stats.overpass,
+        negative: newStats.setStats[currentSetIndex].player1Stats.negative + 
+                 newStats.setStats[currentSetIndex].player2Stats.negative,
+        doubleNegative: newStats.setStats[currentSetIndex].player1Stats.doubleNegative + 
+                       newStats.setStats[currentSetIndex].player2Stats.doubleNegative
+      };
+      
+      console.log(`Estadísticas actualizadas para jugador ${player} - ${statType}: `, 
+        player === 1 ? newStats.player1Stats[statType] : newStats.player2Stats[statType]);
+      
+      return newStats;
+    });
+  };
 
   // Registrar una acción en la línea de tiempo
   const addTimelineAction = (player, statType, skillType) => {
@@ -334,6 +332,69 @@ const updatePlayerStat = (player, statType, value) => {
     }
   };
 
+  // Resetear completamente el partido y las estadísticas
+  const resetMatchAndStats = () => {
+    // Reiniciar las estadísticas para un nuevo partido
+    setStatsData(prev => ({
+      ...prev,
+      stats: {
+        doublePositive: 0,
+        positive: 0,
+        overpass: 0,
+        negative: 0,
+        doubleNegative: 0
+      },
+      player1Stats: {
+        doublePositive: 0,
+        positive: 0,
+        overpass: 0,
+        negative: 0,
+        doubleNegative: 0
+      },
+      player2Stats: {
+        doublePositive: 0,
+        positive: 0,
+        overpass: 0,
+        negative: 0,
+        doubleNegative: 0
+      },
+      // Reiniciar solo el primer set
+      setStats: [{
+        stats: {
+          doublePositive: 0,
+          positive: 0,
+          overpass: 0,
+          negative: 0,
+          doubleNegative: 0
+        },
+        player1Stats: {
+          doublePositive: 0,
+          positive: 0,
+          overpass: 0,
+          negative: 0,
+          doubleNegative: 0
+        },
+        player2Stats: {
+          doublePositive: 0,
+          positive: 0,
+          overpass: 0,
+          negative: 0,
+          doubleNegative: 0
+        }
+      }]
+    }));
+
+    // Reiniciar el estado del partido
+    setMatchData({
+      currentSet: 1,
+      teamScore: 0,
+      opponentScore: 0,
+      sets: [
+        { teamScore: 0, opponentScore: 0, completed: false, actions: [] }
+      ]
+    });
+  };
+
   // Obtener estadísticas del set actual
   const getCurrentSetStats = () => {
     const currentSetIndex = matchData.currentSet - 1;
@@ -453,91 +514,27 @@ const updatePlayerStat = (player, statType, value) => {
     localStorage.removeItem('volleyballData');
   };
 
-  // Función para resetear completamente el partido y las estadísticas
-const resetMatchAndStats = () => {
-  // Reiniciar las estadísticas para un nuevo partido
-  setStatsData(prev => ({
-    ...prev,
-    stats: {
-      doublePositive: 0,
-      positive: 0,
-      overpass: 0,
-      negative: 0,
-      doubleNegative: 0
-    },
-    player1Stats: {
-      doublePositive: 0,
-      positive: 0,
-      overpass: 0,
-      negative: 0,
-      doubleNegative: 0
-    },
-    player2Stats: {
-      doublePositive: 0,
-      positive: 0,
-      overpass: 0,
-      negative: 0,
-      doubleNegative: 0
-    },
-    // Reiniciar solo el primer set
-    setStats: [{
-      stats: {
-        doublePositive: 0,
-        positive: 0,
-        overpass: 0,
-        negative: 0,
-        doubleNegative: 0
-      },
-      player1Stats: {
-        doublePositive: 0,
-        positive: 0,
-        overpass: 0,
-        negative: 0,
-        doubleNegative: 0
-      },
-      player2Stats: {
-        doublePositive: 0,
-        positive: 0,
-        overpass: 0,
-        negative: 0,
-        doubleNegative: 0
-      }
-    }]
-  }));
-
-  // Reiniciar el estado del partido
-  setMatchData({
-    currentSet: 1,
-    teamScore: 0,
-    opponentScore: 0,
-    sets: [
-      { teamScore: 0, opponentScore: 0, completed: false, actions: [] }
-    ]
-  });
-};
-
- 
-return (
-  <VolleyballContext.Provider 
-    value={{
-      statsData,
-      setStatsData,
-      matchData,
-      updatePlayerStat,
-      addTimelineAction,
-      updateScore,
-      startNewSet,
-      finishCurrentSet,
-      resetMatchAndStats,
-      getCurrentSetStats,
-      trendsData,
-      setTrendsData,
-      clearAllData
-    }}
-  >
-    {children}
-  </VolleyballContext.Provider>
-);
+  return (
+    <VolleyballContext.Provider 
+      value={{
+        statsData,
+        setStatsData,
+        matchData,
+        updatePlayerStat,
+        addTimelineAction,
+        updateScore,
+        startNewSet,
+        finishCurrentSet,
+        resetMatchAndStats,
+        getCurrentSetStats,
+        trendsData,
+        setTrendsData,
+        clearAllData
+      }}
+    >
+      {children}
+    </VolleyballContext.Provider>
+  );
 };
 
 export const useVolleyball = () => {
