@@ -492,7 +492,7 @@ const VolleyballStats = () => {
           <form onSubmit={(e) => e.preventDefault()} className="space-y-4 sm:space-y-6">
             {/* Fila de información básica más compacta */}
             <div className="flex flex-wrap gap-2 sm:gap-4">
-              <div className="flex-grow min-w-[120px] max-w-[200px]">
+              <div className="flex-grow min-w-[120px] max-w-[150px]">
                 <label className="block text-xs font-medium text-gray-700 mb-1">Fecha</label>
                 <input
                   type="date"
