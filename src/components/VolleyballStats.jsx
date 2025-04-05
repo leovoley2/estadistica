@@ -185,24 +185,27 @@ const VolleyballStats = () => {
 
   // Función para actualizar las estadísticas de un jugador específico
   const handleStatChange = (statType, value) => {
-    if (selectedPlayer === null) {
-      // Actualizar ambos jugadores
-      updatePlayerStat(1, statType, value);
-      updatePlayerStat(2, statType, value);
-      
-      // Registrar acción para ambos jugadores
-      if (value > 0) {
-        addTimelineAction(1, statType, selectedSkill);
-        addTimelineAction(2, statType, selectedSkill);
-      }
-    } else {
-      // Actualizar solo el jugador seleccionado
+    console.log(`handleStatChange llamado - Jugador: ${selectedPlayer}, Tipo: ${statType}, Valor: ${value}`);
+  
+    // Validar que tenemos un jugador seleccionado o ambos
+    if (selectedPlayer === 1 || selectedPlayer === 2 || selectedPlayer === null) {
+      // Actualizar la estadística para el jugador seleccionado
       updatePlayerStat(selectedPlayer, statType, value);
       
-      // Registrar acción solo si estamos añadiendo (no restando)
+      // Solo registrar en la línea de tiempo cuando incrementamos (no cuando decrementamos)
       if (value > 0) {
-        addTimelineAction(selectedPlayer, statType, selectedSkill);
+        if (selectedPlayer === null) {
+          // Si están seleccionados ambos jugadores, registrar para ambos
+          addTimelineAction(1, statType, selectedSkill);
+          addTimelineAction(2, statType, selectedSkill);
+        } else {
+          // Registrar solo para el jugador específico
+          addTimelineAction(selectedPlayer, statType, selectedSkill);
+        }
       }
+    } else {
+      console.warn("No hay un jugador válido seleccionado");
+      // Podríamos mostrar aquí un mensaje de alerta si queremos
     }
   };
 
@@ -591,7 +594,40 @@ const VolleyballStats = () => {
                 </div>
               </div>
             </div>
-
+                          {/* Indicador de jugador activo para estadísticas */}
+              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 mb-4 rounded">
+                <div className="flex items-center">
+                  {selectedPlayer === 1 && (
+                    <>
+                      <User className="h-6 w-6 mr-2 text-blue-600" />
+                      <div>
+                        <p className="font-medium text-blue-600">Registrando estadísticas para Jugador 1</p>
+                        <p className="text-xs text-gray-600">Los incrementos/decrementos se aplicarán solo al Jugador 1</p>
+                      </div>
+                    </>
+                  )}
+                  
+                  {selectedPlayer === 2 && (
+                    <>
+                      <User className="h-6 w-6 mr-2 text-green-600" />
+                      <div>
+                        <p className="font-medium text-green-600">Registrando estadísticas para Jugador 2</p>
+                        <p className="text-xs text-gray-600">Los incrementos/decrementos se aplicarán solo al Jugador 2</p>
+                      </div>
+                    </>
+                  )}
+                  
+                  {selectedPlayer === null && (
+                    <>
+                      <Users className="h-6 w-6 mr-2 text-purple-600" />
+                      <div>
+                        <p className="font-medium text-purple-600">Registrando estadísticas para ambos jugadores</p>
+                        <p className="text-xs text-gray-600">Los incrementos/decrementos se aplicarán a ambos jugadores</p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
             {/* Botones para estadísticas */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-4">
               {[
