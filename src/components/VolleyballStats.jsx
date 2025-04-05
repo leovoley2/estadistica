@@ -10,7 +10,7 @@ import { useVolleyball } from '../context/VolleyballContext';
 import EvaluationCriteria from './EvaluatioinCriteria';
 import ScoreKeeper from './ScoreKeeper';
 import PlayerSelector from './PlayerSelector';
-import ActionTimeline from './Timeline';
+import ActionTimeline from './ActionTimeline';
 
 const VolleyballStats = () => {
   const navigate = useNavigate();
