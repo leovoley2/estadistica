@@ -514,6 +514,7 @@ const handleDownloadPDF = async () => {
     <div className="min-h-screen bg-gradient-to-b from-blue-400 to-blue-600 p-2 sm:p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
         <div className="bg-white bg-opacity-90 rounded-lg shadow-lg p-3 sm:p-4 md:p-6">
+          <div><img src="/logo.png" alt="logo" /></div>
           <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-center mb-4 sm:mb-6 md:mb-8 text-blue-600">
             Estadísticas de Voleibol de Playa
           </h1>
