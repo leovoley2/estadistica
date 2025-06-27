@@ -32,7 +32,9 @@ export const VolleyballProvider = ({ children }) => {
       }
     ],
     // Registro cronológico de acciones
-    timeline: []
+    timeline: [],
+    // Gráficos guardados por set
+    setCharts: []
   });
 
   // Estado para el control del marcador
@@ -143,16 +145,68 @@ export const VolleyballProvider = ({ children }) => {
     });
   };
 
+  // Función para guardar el gráfico del set actual
+  const saveSetChart = async (chartRef) => {
+    if (!chartRef?.current) {
+      console.warn('No se encontró referencia del gráfico para guardar');
+      return null;
+    }
+    
+    try {
+      // Importar html2canvas dinámicamente
+      const html2canvas = (await import('html2canvas')).default;
+      
+      const canvas = await html2canvas(chartRef.current, {
+        backgroundColor: '#ffffff',
+        scale: 2, // Mayor resolución para mejor calidad
+        useCORS: true,
+        allowTaint: true,
+        logging: false
+      });
+      
+      const chartImage = canvas.toDataURL('image/png', 0.95);
+      const currentSetIndex = matchData.currentSet - 1;
+      
+      setStatsData(prev => {
+        const updatedSetCharts = [...prev.setCharts];
+        updatedSetCharts[currentSetIndex] = {
+          setNumber: matchData.currentSet,
+          chartImage: chartImage,
+          timestamp: new Date().toISOString(),
+          teamScore: matchData.teamScore,
+          opponentScore: matchData.opponentScore,
+          setStats: prev.setStats[currentSetIndex] || {
+            stats: { ...initialStatsState },
+            player1Stats: { ...initialStatsState },
+            player2Stats: { ...initialStatsState }
+          }
+        };
+        
+        return {
+          ...prev,
+          setCharts: updatedSetCharts
+        };
+      });
+      
+      console.log(`Gráfico del Set ${matchData.currentSet} guardado exitosamente`);
+      return chartImage;
+      
+    } catch (error) {
+      console.error('Error al guardar el gráfico del set:', error);
+      return null;
+    }
+  };
+
   // Registrar una acción en la línea de tiempo
   const addTimelineAction = (player, statType, skillType) => {
     setStatsData(prev => {
       const newAction = {
-        id: Date.now(),
+        id: Date.now() + Math.random(),
         player,
         statType,
         skillType,
         set: matchData.currentSet,
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
         teamScore: matchData.teamScore,
         opponentScore: matchData.opponentScore
       };
@@ -172,11 +226,11 @@ export const VolleyballProvider = ({ children }) => {
       const updatedSets = [...prev.sets];
       
       const newAction = {
-        id: Date.now(),
+        id: Date.now() + Math.random(),
         player,
         statType,
         skillType: statsData.selectedSkill,
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
         teamScore: prev.teamScore,
         opponentScore: prev.opponentScore
       };
@@ -275,9 +329,15 @@ export const VolleyballProvider = ({ children }) => {
     });
   };
 
-  // Finalizar set actual
-  const finishCurrentSet = () => {
+  // Finalizar set actual con guardado automático de gráfico
+  const finishCurrentSet = async (chartRef) => {
     if (window.confirm(`¿Desea finalizar el set ${matchData.currentSet}?`)) {
+      
+      // Guardar el gráfico del set antes de finalizarlo
+      if (chartRef) {
+        await saveSetChart(chartRef);
+      }
+      
       setMatchData(prev => {
         // Marcar el set actual como completado
         const updatedSets = [...prev.sets];
@@ -335,54 +395,23 @@ export const VolleyballProvider = ({ children }) => {
   // Resetear completamente el partido y las estadísticas
   const resetMatchAndStats = () => {
     // Reiniciar las estadísticas para un nuevo partido
-    setStatsData(prev => ({
-      ...prev,
-      stats: {
-        doublePositive: 0,
-        positive: 0,
-        overpass: 0,
-        negative: 0,
-        doubleNegative: 0
-      },
-      player1Stats: {
-        doublePositive: 0,
-        positive: 0,
-        overpass: 0,
-        negative: 0,
-        doubleNegative: 0
-      },
-      player2Stats: {
-        doublePositive: 0,
-        positive: 0,
-        overpass: 0,
-        negative: 0,
-        doubleNegative: 0
-      },
+    setStatsData({
+      date: '',
+      name: '',
+      selectedSkill: '',
+      stats: { ...initialStatsState },
+      player1Stats: { ...initialStatsState },
+      player2Stats: { ...initialStatsState },
       // Reiniciar solo el primer set
       setStats: [{
-        stats: {
-          doublePositive: 0,
-          positive: 0,
-          overpass: 0,
-          negative: 0,
-          doubleNegative: 0
-        },
-        player1Stats: {
-          doublePositive: 0,
-          positive: 0,
-          overpass: 0,
-          negative: 0,
-          doubleNegative: 0
-        },
-        player2Stats: {
-          doublePositive: 0,
-          positive: 0,
-          overpass: 0,
-          negative: 0,
-          doubleNegative: 0
-        }
-      }]
-    }));
+        stats: { ...initialStatsState },
+        player1Stats: { ...initialStatsState },
+        player2Stats: { ...initialStatsState }
+      }],
+      timeline: [],
+      // Limpiar gráficos guardados
+      setCharts: []
+    });
 
     // Reiniciar el estado del partido
     setMatchData({
@@ -408,6 +437,177 @@ export const VolleyballProvider = ({ children }) => {
     };
   };
 
+  // Función para obtener eficiencia de un set específico
+  const getSetEfficiency = (setIndex) => {
+    if (!statsData.setStats[setIndex]) return 0;
+    
+    const setData = statsData.setStats[setIndex].stats;
+    const total = Object.values(setData).reduce((a, b) => a + b, 0);
+    
+    if (total === 0) return 0;
+    
+    const weightedSum = (
+      setData.doublePositive * 4 +
+      setData.positive * 2 +
+      setData.overpass * 0 +
+      setData.negative * -2 +
+      setData.doubleNegative * -4
+    );
+    
+    return ((weightedSum / (total * 4)) * 100);
+  };
+
+  // Función para obtener eficacia de un set específico
+  const getSetEffectiveness = (setIndex) => {
+    if (!statsData.setStats[setIndex]) return 0;
+    
+    const setData = statsData.setStats[setIndex].stats;
+    const total = Object.values(setData).reduce((a, b) => a + b, 0);
+    
+    if (total === 0) return 0;
+    
+    return (((setData.doublePositive + setData.positive) / total) * 100);
+  };
+
+  // Función para obtener estadísticas resumidas del partido
+  const getMatchSummary = () => {
+    const totalActions = Object.values(statsData.stats).reduce((a, b) => a + b, 0);
+    const player1Actions = Object.values(statsData.player1Stats).reduce((a, b) => a + b, 0);
+    const player2Actions = Object.values(statsData.player2Stats).reduce((a, b) => a + b, 0);
+    
+    // Calcular eficiencias
+    const overallEfficiency = totalActions > 0 ? (
+      (statsData.stats.doublePositive * 4 + statsData.stats.positive * 2 + 
+       statsData.stats.overpass * 0 + statsData.stats.negative * -2 + 
+       statsData.stats.doubleNegative * -4) / (totalActions * 4)
+    ) * 100 : 0;
+    
+    const player1Efficiency = player1Actions > 0 ? (
+      (statsData.player1Stats.doublePositive * 4 + statsData.player1Stats.positive * 2 + 
+       statsData.player1Stats.overpass * 0 + statsData.player1Stats.negative * -2 + 
+       statsData.player1Stats.doubleNegative * -4) / (player1Actions * 4)
+    ) * 100 : 0;
+    
+    const player2Efficiency = player2Actions > 0 ? (
+      (statsData.player2Stats.doublePositive * 4 + statsData.player2Stats.positive * 2 + 
+       statsData.player2Stats.overpass * 0 + statsData.player2Stats.negative * -2 + 
+       statsData.player2Stats.doubleNegative * -4) / (player2Actions * 4)
+    ) * 100 : 0;
+    
+    return {
+      totalActions,
+      player1Actions,
+      player2Actions,
+      overallEfficiency: parseFloat(overallEfficiency.toFixed(2)),
+      player1Efficiency: parseFloat(player1Efficiency.toFixed(2)),
+      player2Efficiency: parseFloat(player2Efficiency.toFixed(2)),
+      setsPlayed: matchData.sets.filter(set => set.completed).length,
+      currentSet: matchData.currentSet,
+      setsWon: matchData.sets.filter(set => set.completed && set.teamScore > set.opponentScore).length,
+      setsLost: matchData.sets.filter(set => set.completed && set.teamScore < set.opponentScore).length
+    };
+  };
+
+  // Función para validar la integridad de los datos
+  const validateDataIntegrity = () => {
+    try {
+      // Verificar que las estadísticas totales coincidan con la suma de jugadores
+      const calculatedTotal = {
+        doublePositive: statsData.player1Stats.doublePositive + statsData.player2Stats.doublePositive,
+        positive: statsData.player1Stats.positive + statsData.player2Stats.positive,
+        overpass: statsData.player1Stats.overpass + statsData.player2Stats.overpass,
+        negative: statsData.player1Stats.negative + statsData.player2Stats.negative,
+        doubleNegative: statsData.player1Stats.doubleNegative + statsData.player2Stats.doubleNegative
+      };
+      
+      // Verificar discrepancias
+      const hasDiscrepancies = Object.keys(calculatedTotal).some(key => 
+        calculatedTotal[key] !== statsData.stats[key]
+      );
+      
+      if (hasDiscrepancies) {
+        console.warn('Discrepancia detectada en estadísticas totales, recalculando...');
+        
+        setStatsData(prev => ({
+          ...prev,
+          stats: calculatedTotal
+        }));
+      }
+      
+      return !hasDiscrepancies;
+    } catch (error) {
+      console.error('Error en validación de integridad:', error);
+      return false;
+    }
+  };
+
+  // Función para exportar datos en formato JSON
+  const exportData = () => {
+    try {
+      const exportData = {
+        version: '2.0',
+        exportDate: new Date().toISOString(),
+        matchInfo: {
+          date: statsData.date,
+          team: statsData.name,
+          skill: statsData.selectedSkill
+        },
+        matchData,
+        statsData,
+        trendsData,
+        summary: getMatchSummary()
+      };
+      
+      const dataStr = JSON.stringify(exportData, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(dataBlob);
+      
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `volleyball-data-${statsData.name || 'partido'}-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      return true;
+    } catch (error) {
+      console.error('Error al exportar datos:', error);
+      return false;
+    }
+  };
+
+  // Función para importar datos desde JSON
+  const importData = (jsonData) => {
+    try {
+      const data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
+      
+      // Validar estructura básica
+      if (!data.statsData || !data.matchData) {
+        throw new Error('Estructura de datos inválida');
+      }
+      
+      // Migrar datos si es necesario
+      if (data.version !== '2.0') {
+        console.log('Migrando datos de versión anterior...');
+        // Aquí se pueden agregar migraciones específicas
+      }
+      
+      setStatsData(data.statsData);
+      setMatchData(data.matchData);
+      
+      if (data.trendsData) {
+        setTrendsData(data.trendsData);
+      }
+      
+      console.log('Datos importados exitosamente');
+      return true;
+    } catch (error) {
+      console.error('Error al importar datos:', error);
+      return false;
+    }
+  };
+
   // Cargar datos del localStorage al iniciar
   useEffect(() => {
     const savedData = localStorage.getItem('volleyballData');
@@ -421,6 +621,17 @@ export const VolleyballProvider = ({ children }) => {
           if (parsed.statsData.stats && 'regular' in parsed.statsData.stats) {
             parsed.statsData.stats.overpass = parsed.statsData.stats.regular || 0;
             delete parsed.statsData.stats.regular;
+          }
+          
+          // Migrar player stats si tienen 'regular'
+          if (parsed.statsData.player1Stats && 'regular' in parsed.statsData.player1Stats) {
+            parsed.statsData.player1Stats.overpass = parsed.statsData.player1Stats.regular || 0;
+            delete parsed.statsData.player1Stats.regular;
+          }
+          
+          if (parsed.statsData.player2Stats && 'regular' in parsed.statsData.player2Stats) {
+            parsed.statsData.player2Stats.overpass = parsed.statsData.player2Stats.regular || 0;
+            delete parsed.statsData.player2Stats.regular;
           }
           
           // Si existe player1Stats pero no existe setStats, crear setStats
@@ -444,6 +655,16 @@ export const VolleyballProvider = ({ children }) => {
             }];
           }
           
+          // Si no existe setCharts, crearlo
+          if (!parsed.statsData.setCharts) {
+            parsed.statsData.setCharts = [];
+          }
+          
+          // Si no existe timeline, crearlo
+          if (!parsed.statsData.timeline) {
+            parsed.statsData.timeline = [];
+          }
+          
           setStatsData(parsed.statsData);
         }
         
@@ -461,8 +682,12 @@ export const VolleyballProvider = ({ children }) => {
         if (parsed.trendsData) {
           setTrendsData(parsed.trendsData);
         }
+        
+        console.log('Datos cargados exitosamente desde localStorage');
       } catch (error) {
         console.error('Error parsing saved data:', error);
+        // En caso de error, inicializar con datos por defecto
+        console.log('Inicializando con datos por defecto...');
       }
     }
   }, []);
@@ -470,18 +695,42 @@ export const VolleyballProvider = ({ children }) => {
   // Guardar datos en localStorage cuando cambien
   useEffect(() => {
     try {
-      localStorage.setItem('volleyballData', JSON.stringify({
+      const dataToSave = {
         statsData,
         matchData,
-        trendsData
-      }));
+        trendsData,
+        version: '2.0',
+        lastSaved: new Date().toISOString()
+      };
+      
+      localStorage.setItem('volleyballData', JSON.stringify(dataToSave));
+      
+      // Validar integridad después de guardar
+      setTimeout(() => {
+        validateDataIntegrity();
+      }, 100);
+      
     } catch (error) {
       console.error('Error saving data:', error);
+      
+      // Si hay error por espacio, intentar limpiar datos antiguos
+      if (error.name === 'QuotaExceededError') {
+        try {
+          // Limpiar gráficos más antiguos si hay muchos
+          const updatedStatsData = { ...statsData };
+          if (updatedStatsData.setCharts.length > 5) {
+            updatedStatsData.setCharts = updatedStatsData.setCharts.slice(-3); // Mantener solo los últimos 3
+            setStatsData(updatedStatsData);
+          }
+        } catch (cleanupError) {
+          console.error('Error en limpieza de datos:', cleanupError);
+        }
+      }
     }
   }, [statsData, matchData, trendsData]);
 
   const clearAllData = () => {
-    setStatsData({
+    const initialData = {
       date: '',
       name: '',
       selectedSkill: '',
@@ -493,8 +742,11 @@ export const VolleyballProvider = ({ children }) => {
         player1Stats: { ...initialStatsState },
         player2Stats: { ...initialStatsState }
       }],
-      timeline: []
-    });
+      timeline: [],
+      setCharts: []
+    };
+    
+    setStatsData(initialData);
     
     setMatchData({
       currentSet: 1,
@@ -511,24 +763,47 @@ export const VolleyballProvider = ({ children }) => {
       canvasImage: null
     });
     
-    localStorage.removeItem('volleyballData');
+    try {
+      localStorage.removeItem('volleyballData');
+      console.log('Todos los datos han sido limpiados exitosamente');
+    } catch (error) {
+      console.error('Error al limpiar localStorage:', error);
+    }
   };
 
   return (
     <VolleyballContext.Provider 
       value={{
+        // Datos principales
         statsData,
         setStatsData,
         matchData,
+        trendsData,
+        setTrendsData,
+        
+        // Funciones de actualización de estadísticas
         updatePlayerStat,
         addTimelineAction,
+        
+        // Funciones de control de partido
         updateScore,
         startNewSet,
         finishCurrentSet,
         resetMatchAndStats,
+        
+        // Funciones de gráficos
+        saveSetChart,
+        
+        // Funciones de consulta
         getCurrentSetStats,
-        trendsData,
-        setTrendsData,
+        getSetEfficiency,
+        getSetEffectiveness,
+        getMatchSummary,
+        
+        // Funciones de utilidad
+        validateDataIntegrity,
+        exportData,
+        importData,
         clearAllData
       }}
     >
@@ -536,6 +811,7 @@ export const VolleyballProvider = ({ children }) => {
     </VolleyballContext.Provider>
   );
 };
+
 
 export const useVolleyball = () => {
   const context = useContext(VolleyballContext);

@@ -1,15 +1,32 @@
 import React from 'react';
-import { PlusCircle, MinusCircle, Flag, Check, RefreshCw } from 'lucide-react';
+import { PlusCircle, MinusCircle, Flag, Check, RefreshCw, Save } from 'lucide-react';
 import { useVolleyball } from '../context/VolleyballContext';
 
-const ScoreKeeper = () => {
-  const { matchData, updateScore, startNewSet, finishCurrentSet, resetMatchAndStats } = useVolleyball();
+const ScoreKeeper = ({ chartRef }) => {
+  const { matchData, updateScore, startNewSet, finishCurrentSet, resetMatchAndStats, saveSetChart } = useVolleyball();
   const { currentSet, teamScore, opponentScore, sets } = matchData;
 
   // Función para confirmar y resetear completamente el partido
   const handleResetComplete = () => {
     if (window.confirm('¿Está seguro que desea resetear completamente el partido? Se borrarán todos los sets y el marcador volverá a 0-0.')) {
       resetMatchAndStats();
+    }
+  };
+
+  // Función para finalizar set con guardado de gráfico
+  const handleFinishSet = async () => {
+    await finishCurrentSet(chartRef);
+  };
+
+  // Función para guardar manualmente el gráfico del set actual
+  const handleSaveChart = async () => {
+    if (chartRef) {
+      const saved = await saveSetChart(chartRef);
+      if (saved) {
+        alert(`Gráfico del Set ${currentSet} guardado exitosamente`);
+      } else {
+        alert('Error al guardar el gráfico');
+      }
     }
   };
 
@@ -28,8 +45,18 @@ const ScoreKeeper = () => {
             <RefreshCw className="h-3 w-3 mr-1" />
             <span>Nuevo Partido</span>
           </button>
+          
           <button
-            onClick={finishCurrentSet}
+            onClick={handleSaveChart}
+            className="flex items-center text-xs bg-yellow-500 text-white px-2 py-1 rounded hover:bg-yellow-600"
+            title="Guardar gráfico del set actual"
+          >
+            <Save className="h-3 w-3 mr-1" />
+            <span>Guardar Gráfico</span>
+          </button>
+          
+          <button
+            onClick={handleFinishSet}
             className={`flex items-center text-xs ${
               sets[currentSet - 1]?.completed 
                 ? 'bg-gray-300 cursor-not-allowed' 
@@ -40,6 +67,7 @@ const ScoreKeeper = () => {
             <Check className="h-3 w-3 mr-1" />
             <span>Finalizar Set</span>
           </button>
+          
           {currentSet < 3 && (
             <button
               onClick={startNewSet}

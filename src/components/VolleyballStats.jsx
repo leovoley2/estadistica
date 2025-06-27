@@ -306,173 +306,201 @@ const VolleyballStats = () => {
     );
   };
 
-  const handleDownloadPDF = async () => {
-    if (!name || !date || !selectedSkill) {
-      alert('Por favor, complete todos los campos antes de descargar el PDF');
-      return;
-    }
-  
-    try {
-      const doc = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
-      
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      
-      // Título
-      doc.setFontSize(18);
-      doc.setTextColor(0, 0, 255);
-      doc.text('Estadísticas de Voleibol de Playa', pageWidth/2, 15, { align: 'center' });
-      
-      // Información básica
-      doc.setFontSize(10);
-      doc.setTextColor(0, 0, 0);
-      doc.text([
-        `Fecha: ${format(new Date(date), "PPP", { locale: es })}`,
-        `Nombre/Equipo: ${name}`,
-        `Fundamento: ${selectedSkill}`,
-        `Set: ${matchData.currentSet}`,
-        `Marcador: ${matchData.teamScore} - ${matchData.opponentScore}`
-      ], 15, 25);
-  
-      // Estadísticas globales
-      doc.setFontSize(12);
-      doc.text('Estadísticas Totales del Equipo:', 15, 45);
-      doc.setFontSize(10);
-      
-      const stats_text = [
-        `Total de Acciones: ${Object.values(statsData.stats).reduce((a, b) => a + b, 0)}`,
-        `Doble Positivo (##): ${statsData.stats.doublePositive}`,
-        `Positivo (+): ${statsData.stats.positive}`,
-        `Overpass (/): ${statsData.stats.overpass}`,
-        `Negativo (-): ${statsData.stats.negative}`,
-        `Doble Negativo (=): ${statsData.stats.doubleNegative}`,
-      ];
-      
-      doc.text(stats_text, 15, 55);// Estadísticas por sets
-      let yPos = 75;
-      
-      // Título de la sección
-      doc.setFontSize(12);
-      doc.text('Estadísticas por Set:', 15, yPos);
-      doc.setFontSize(10);
-      yPos += 8;
-      
-      statsData.setStats.forEach((set, index) => {
-        if (index < 3) { // Solo mostrar máximo 3 sets
-          doc.setFillColor(240, 240, 240);
-          doc.rect(15, yPos - 4, 180, 7, 'F');
-          doc.text(`Set ${index + 1} - Marcador: ${matchData.sets[index]?.teamScore || 0}-${matchData.sets[index]?.opponentScore || 0}`, 17, yPos);
-          yPos += 8;
-          
-          // Tabla para jugador 1
-          doc.text(`Jugador 1:`, 15, yPos);
-          yPos += 5;
-          
-          const setDataP1 = [
-            `Doble Positivo (##): ${set.player1Stats.doublePositive}`,
-            `Positivo (+): ${set.player1Stats.positive}`,
-            `Overpass (/): ${set.player1Stats.overpass}`,
-            `Negativo (-): ${set.player1Stats.negative}`,
-            `Doble Negativo (=): ${set.player1Stats.doubleNegative}`,
-          ];
-          
-          doc.text(setDataP1, 15, yPos);
-          yPos += 15;
-          
-          // Tabla para jugador 2
-          doc.text(`Jugador 2:`, 15, yPos);
-          yPos += 5;
-          
-          const setDataP2 = [
-            `Doble Positivo (##): ${set.player2Stats.doublePositive}`,
-            `Positivo (+): ${set.player2Stats.positive}`,
-            `Overpass (/): ${set.player2Stats.overpass}`,
-            `Negativo (-): ${set.player2Stats.negative}`,
-            `Doble Negativo (=): ${set.player2Stats.doubleNegative}`,
-          ];
-          
-          doc.text(setDataP2, 15, yPos);
-          yPos += 20;
-        }
-      });
+  // Actualización de la función handleDownloadPDF en VolleyballStats.jsx
 
-      // Gráfico de barras
-      const chartDiv = chartRef.current;
-      if (chartDiv) {
-        const chartImage = await html2canvas(chartDiv);
-        const chartData = chartImage.toDataURL('image/png');
-        doc.addImage(chartData, 'PNG', 15, yPos, pageWidth - 30, pageHeight * 0.25);
+const handleDownloadPDF = async () => {
+  if (!name || !date || !selectedSkill) {
+    alert('Por favor, complete todos los campos antes de descargar el PDF');
+    return;
+  }
+
+  try {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+    
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    
+    // ===== PÁGINA 1: RESUMEN GENERAL =====
+    doc.setFontSize(18);
+    doc.setTextColor(0, 0, 255);
+    doc.text('Estadísticas de Voleibol de Playa', pageWidth/2, 15, { align: 'center' });
+    
+    // Información básica
+    doc.setFontSize(10);
+    doc.setTextColor(0, 0, 0);
+    doc.text([
+      `Fecha: ${format(new Date(date), "PPP", { locale: es })}`,
+      `Nombre/Equipo: ${name}`,
+      `Fundamento: ${selectedSkill}`,
+      `Marcador Final: ${matchData.sets.map((set, i) => 
+        `Set ${i+1}: ${set.teamScore}-${set.opponentScore}`).join(' | ')}`
+    ], 15, 25);
+
+    // Estadísticas globales resumidas
+    doc.setFontSize(12);
+    doc.text('Resumen General del Partido:', 15, 45);
+    doc.setFontSize(10);
+    
+    const globalStats = [
+      `Total de Acciones: ${Object.values(statsData.stats).reduce((a, b) => a + b, 0)}`,
+      `Eficiencia General: ${((
+        (statsData.stats.doublePositive * 4 + statsData.stats.positive * 2 + 
+         statsData.stats.overpass * 0 + statsData.stats.negative * -2 + 
+         statsData.stats.doubleNegative * -4) / 
+        (Object.values(statsData.stats).reduce((a, b) => a + b, 0) * 4)
+      ) * 100).toFixed(2)}%`,
+    ];
+    
+    doc.text(globalStats, 15, 55);
+
+    // Tabla comparativa de jugadores
+    doc.setFontSize(11);
+    doc.text('Comparación por Jugador:', 15, 70);
+    
+    // Crear tabla simple
+    const tableY = 80;
+    const rowHeight = 8;
+    
+    // Encabezados
+    doc.setFillColor(240, 240, 240);
+    doc.rect(15, tableY, 170, rowHeight, 'F');
+    doc.setFontSize(9);
+    doc.text('Estadística', 17, tableY + 5);
+    doc.text('Jugador 1', 70, tableY + 5);
+    doc.text('Jugador 2', 120, tableY + 5);
+    doc.text('Total', 160, tableY + 5);
+    
+    // Filas de datos
+    const statsRows = [
+      ['Doble Positivo (##)', statsData.player1Stats.doublePositive, statsData.player2Stats.doublePositive, statsData.stats.doublePositive],
+      ['Positivo (+)', statsData.player1Stats.positive, statsData.player2Stats.positive, statsData.stats.positive],
+      ['Overpass (/)', statsData.player1Stats.overpass, statsData.player2Stats.overpass, statsData.stats.overpass],
+      ['Negativo (-)', statsData.player1Stats.negative, statsData.player2Stats.negative, statsData.stats.negative],
+      ['Doble Negativo (=)', statsData.player1Stats.doubleNegative, statsData.player2Stats.doubleNegative, statsData.stats.doubleNegative]
+    ];
+    
+    statsRows.forEach((row, index) => {
+      const y = tableY + (index + 1) * rowHeight;
+      if (index % 2 === 0) {
+        doc.setFillColor(248, 248, 248);
+        doc.rect(15, y, 170, rowHeight, 'F');
       }
-      
-      // Agregar segunda página con gráficos
+      doc.text(row[0], 17, y + 5);
+      doc.text(row[1].toString(), 75, y + 5);
+      doc.text(row[2].toString(), 125, y + 5);
+      doc.text(row[3].toString(), 165, y + 5);
+    });
+
+    // ===== PÁGINAS POR SET CON GRÁFICOS =====
+    statsData.setCharts.forEach((setChart, index) => {
       doc.addPage();
       
-      // Gráfico de comparación por sets
-      doc.setFontSize(14);
+      // Título del set
+      doc.setFontSize(16);
       doc.setTextColor(0, 0, 255);
-      doc.text('Comparación de Eficiencia por Sets', pageWidth/2, 15, { align: 'center' });
+      doc.text(`Set ${setChart.setNumber} - Análisis Detallado`, pageWidth/2, 15, { align: 'center' });
       
-      // Capturar y agregar el gráfico de comparación
-      const setChartDiv = setChartRef.current;
-      if (setChartDiv) {
-        const setChartImage = await html2canvas(setChartDiv);
-        const setChartData = setChartImage.toDataURL('image/png');
-        doc.addImage(setChartData, 'PNG', 15, 25, pageWidth - 30, pageHeight * 0.3);
-      }
-      
-      // Criterios de evaluación
-      doc.setFontSize(14);
-      doc.setTextColor(0, 0, 255);
-      doc.text('Criterios de Evaluación', pageWidth/2, pageHeight * 0.4, { align: 'center' });
-      
+      // Marcador del set
       doc.setFontSize(12);
       doc.setTextColor(0, 0, 0);
-      doc.text(`Fundamento: ${selectedSkill}`, 15, pageHeight * 0.4 + 10);
-
-      // Tabla de criterios (simplificada para el PDF)
-      const criterioPosY = pageHeight * 0.4 + 20;
-      const lineHeight = 7;
+      doc.text(`Marcador: ${setChart.teamScore} - ${setChart.opponentScore}`, pageWidth/2, 25, { align: 'center' });
       
-      // Encabezado de tabla
-      doc.setFillColor(230, 230, 230);
-      doc.rect(15, criterioPosY, 180, 7, 'F');
-      doc.setFontSize(10);
-      doc.setTextColor(0, 0, 0);
-      doc.text("Símbolo", 17, criterioPosY + 5);
-      doc.text("Tipo", 47, criterioPosY + 5);
-      doc.text("Descripción", 97, criterioPosY + 5);
+      // Gráfico del set
+      if (setChart.chartImage) {
+        const imgWidth = pageWidth - 30;
+        const imgHeight = 80;
+        doc.addImage(setChart.chartImage, 'PNG', 15, 35, imgWidth, imgHeight);
+      }
       
-      // Filas de la tabla
-      const criterios = [
-        { symbol: "##", tipo: "Doble Positivo", desc: "Acción perfecta o punto directo" },
-        { symbol: "+", tipo: "Positivo", desc: "Acción que genera ventaja para el equipo" },
-        { symbol: "/", tipo: "Overpass", desc: "Acción que resulta en pase al campo contrario" },
-        { symbol: "-", tipo: "Negativo", desc: "Acción que genera desventaja para el equipo" },
-        { symbol: "=", tipo: "Doble Negativo", desc: "Error" }
+      // Estadísticas detalladas del set
+      doc.setFontSize(11);
+      doc.text(`Estadísticas del Set ${setChart.setNumber}:`, 15, 125);
+      doc.setFontSize(9);
+      
+      const setStatsData = setChart.setStats;
+      const setStatsText = [
+        `Jugador 1 - Total: ${Object.values(setStatsData.player1Stats).reduce((a, b) => a + b, 0)} acciones`,
+        `  ## ${setStatsData.player1Stats.doublePositive}, + ${setStatsData.player1Stats.positive}, / ${setStatsData.player1Stats.overpass}, - ${setStatsData.player1Stats.negative}, = ${setStatsData.player1Stats.doubleNegative}`,
+        '',
+        `Jugador 2 - Total: ${Object.values(setStatsData.player2Stats).reduce((a, b) => a + b, 0)} acciones`,
+        `  ## ${setStatsData.player2Stats.doublePositive}, + ${setStatsData.player2Stats.positive}, / ${setStatsData.player2Stats.overpass}, - ${setStatsData.player2Stats.negative}, = ${setStatsData.player2Stats.doubleNegative}`,
+        '',
+        `Total del Set: ${Object.values(setStatsData.stats).reduce((a, b) => a + b, 0)} acciones`,
+        `  ## ${setStatsData.stats.doublePositive}, + ${setStatsData.stats.positive}, / ${setStatsData.stats.overpass}, - ${setStatsData.stats.negative}, = ${setStatsData.stats.doubleNegative}`
       ];
       
-      criterios.forEach((criterio, idx) => {
-        const y = criterioPosY + ((idx + 1) * lineHeight);
-        if (idx % 2 === 0) {
-          doc.setFillColor(245, 245, 245);
-          doc.rect(15, y, 180, lineHeight, 'F');
-        }
-        doc.text(criterio.symbol, 17, y + 5);
-        doc.text(criterio.tipo, 47, y + 5);
-        doc.text(criterio.desc, 97, y + 5);
-      });
-  
-      doc.save(`estadisticas-${name}-${date}.pdf`);
-    } catch (error) {
-      console.error('Error al generar el PDF:', error);
-      alert('Error al generar el PDF. Por favor, intente nuevamente.');
-    }
-  };
+      doc.text(setStatsText, 15, 135);
+      
+      // Calcular eficiencia del set
+      const setTotal = Object.values(setStatsData.stats).reduce((a, b) => a + b, 0);
+      if (setTotal > 0) {
+        const setEfficiency = ((
+          (setStatsData.stats.doublePositive * 4 + setStatsData.stats.positive * 2 + 
+           setStatsData.stats.overpass * 0 + setStatsData.stats.negative * -2 + 
+           setStatsData.stats.doubleNegative * -4) / (setTotal * 4)
+        ) * 100).toFixed(2);
+        
+        doc.setFontSize(10);
+        doc.text(`Eficiencia del Set: ${setEfficiency}%`, 15, 170);
+      }
+      
+      // Timestamp
+      doc.setFontSize(8);
+      doc.setTextColor(128, 128, 128);
+      doc.text(`Guardado: ${format(new Date(setChart.timestamp), "PPpp", { locale: es })}`, 15, pageHeight - 10);
+    });
+    
+    // ===== PÁGINA FINAL: CRITERIOS DE EVALUACIÓN =====
+    doc.addPage();
+    doc.setFontSize(14);
+    doc.setTextColor(0, 0, 255);
+    doc.text('Criterios de Evaluación', pageWidth/2, 15, { align: 'center' });
+    
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Fundamento: ${selectedSkill}`, 15, 25);
 
+    // Tabla de criterios
+    const criterioPosY = 35;
+    const lineHeight = 7;
+    
+    doc.setFillColor(230, 230, 230);
+    doc.rect(15, criterioPosY, 180, 7, 'F');
+    doc.setFontSize(10);
+    doc.text("Símbolo", 17, criterioPosY + 5);
+    doc.text("Tipo", 47, criterioPosY + 5);
+    doc.text("Descripción", 97, criterioPosY + 5);
+    
+    const criterios = [
+      { symbol: "##", tipo: "Doble Positivo", desc: "Acción perfecta o punto directo" },
+      { symbol: "+", tipo: "Positivo", desc: "Acción que genera ventaja para el equipo" },
+      { symbol: "/", tipo: "Overpass", desc: "Acción que resulta en pase al campo contrario" },
+      { symbol: "-", tipo: "Negativo", desc: "Acción que genera desventaja para el equipo" },
+      { symbol: "=", tipo: "Doble Negativo", desc: "Error" }
+    ];
+    
+    criterios.forEach((criterio, idx) => {
+      const y = criterioPosY + ((idx + 1) * lineHeight);
+      if (idx % 2 === 0) {
+        doc.setFillColor(245, 245, 245);
+        doc.rect(15, y, 180, lineHeight, 'F');
+      }
+      doc.text(criterio.symbol, 17, y + 5);
+      doc.text(criterio.tipo, 47, y + 5);
+      doc.text(criterio.desc, 97, y + 5);
+    });
+
+    doc.save(`estadisticas-completas-${name}-${date}.pdf`);
+    
+  } catch (error) {
+    console.error('Error al generar el PDF:', error);
+    alert('Error al generar el PDF. Por favor, intente nuevamente.');
+  }
+};
   // Guardar el estado en el contexto
   useEffect(() => {
     setStatsData(prev => ({
@@ -560,7 +588,7 @@ const VolleyballStats = () => {
             </div>
 
             {/* Marcador y Sets */}
-            <ScoreKeeper />
+            <ScoreKeeper chartRef={chartRef} />
 
             {/* Selector de Jugador y Vista de Estadísticas con indicador mejorado */}
             <div className="space-y-4">
@@ -682,6 +710,41 @@ const VolleyballStats = () => {
 
             {/* Gráfico de estadísticas */}
             <div className="w-full" ref={chartRef}>
+                <div className="bg-white p-4 rounded-lg h-[300px] sm:h-[400px]">
+                  <h4 className="text-sm font-medium mb-2 text-center">
+                    Estadísticas {showCurrentSetStats ? `Set ${matchData.currentSet}` : 'Totales'} - {
+                      statView === 'player1' ? 'Jugador 1' :
+                      statView === 'player2' ? 'Jugador 2' :
+                      'Equipo'
+                    }
+                  </h4>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={[
+                      { name: '##', value: currentStats.doublePositive, color: '#22c55e' },
+                      { name: '+', value: currentStats.positive, color: '#3b82f6' },
+                      { name: '/', value: currentStats.overpass, color: '#f59e0b' },
+                      { name: '-', value: currentStats.negative, color: '#ef4444' },
+                      { name: '=', value: currentStats.doubleNegative, color: '#7f1d1d' }
+                    ]}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip formatter={(value) => [`${value}`, 'Cantidad']} />
+                      <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                        {[
+                          { color: '#22c55e' },
+                          { color: '#3b82f6' },
+                          { color: '#f59e0b' },
+                          { color: '#ef4444' },
+                          { color: '#7f1d1d' }
+                        ].map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+            </div>
               <div className="bg-white p-4 rounded-lg h-[300px] sm:h-[400px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={[
