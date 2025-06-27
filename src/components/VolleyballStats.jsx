@@ -306,7 +306,7 @@ const VolleyballStats = () => {
     );
   };
 
-  // Actualización de la función handleDownloadPDF en VolleyballStats.jsx
+ // Actualización de la función handleDownloadPDF en VolleyballStats.jsx
 
 const handleDownloadPDF = async () => {
   if (!name || !date || !selectedSkill) {
@@ -501,6 +501,7 @@ const handleDownloadPDF = async () => {
     alert('Error al generar el PDF. Por favor, intente nuevamente.');
   }
 };
+
   // Guardar el estado en el contexto
   useEffect(() => {
     setStatsData(prev => ({
@@ -744,35 +745,9 @@ const handleDownloadPDF = async () => {
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-            </div>
-              <div className="bg-white p-4 rounded-lg h-[300px] sm:h-[400px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={[
-                    { name: '##', value: currentStats.doublePositive, color: '#22c55e' },
-                    { name: '+', value: currentStats.positive, color: '#3b82f6' },
-                    { name: '/', value: currentStats.overpass, color: '#f59e0b' },
-                    { name: '-', value: currentStats.negative, color: '#ef4444' },
-                    { name: '=', value: currentStats.doubleNegative, color: '#7f1d1d' }
-                  ]}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip formatter={(value) => [`${value}`, 'Cantidad']} />
-                    <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                      {[
-                        { color: '#22c55e' },
-                        { color: '#3b82f6' },
-                        { color: '#f59e0b' },
-                        { color: '#ef4444' },
-                        { color: '#7f1d1d' }
-                      ].map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
               </div>
-            </div>{/* Gráfico comparativo por sets */}
+            
+            {/* Gráfico comparativo por sets */}
             <div className="w-full" ref={setChartRef}>
               <div className="bg-white p-4 rounded-lg h-[300px] sm:h-[400px]">
                 <h3 className="text-sm font-medium mb-2">Comparación de Eficiencia por Set</h3>
