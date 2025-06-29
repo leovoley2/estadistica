@@ -376,7 +376,7 @@ const handleDownloadPDF = async () => {
     
     // Filas de datos
     const statsRows = [
-      ['Doble Positivo (#)', statsData.player1Stats.doublePositive, statsData.player2Stats.doublePositive, statsData.stats.doublePositive],
+      ['Doble Positivo (##)', statsData.player1Stats.doublePositive, statsData.player2Stats.doublePositive, statsData.stats.doublePositive],
       ['Positivo (+)', statsData.player1Stats.positive, statsData.player2Stats.positive, statsData.stats.positive],
       ['Overpass (/)', statsData.player1Stats.overpass, statsData.player2Stats.overpass, statsData.stats.overpass],
       ['Negativo (-)', statsData.player1Stats.negative, statsData.player2Stats.negative, statsData.stats.negative],
@@ -424,13 +424,13 @@ const handleDownloadPDF = async () => {
       const setStatsData = setChart.setStats;
       const setStatsText = [
         `Jugador 1 - Total: ${Object.values(setStatsData.player1Stats).reduce((a, b) => a + b, 0)} acciones`,
-        `  # ${setStatsData.player1Stats.doublePositive}, + ${setStatsData.player1Stats.positive}, / ${setStatsData.player1Stats.overpass}, - ${setStatsData.player1Stats.negative}, = ${setStatsData.player1Stats.doubleNegative}`,
+        `  ## ${setStatsData.player1Stats.doublePositive}, + ${setStatsData.player1Stats.positive}, / ${setStatsData.player1Stats.overpass}, - ${setStatsData.player1Stats.negative}, = ${setStatsData.player1Stats.doubleNegative}`,
         '',
         `Jugador 2 - Total: ${Object.values(setStatsData.player2Stats).reduce((a, b) => a + b, 0)} acciones`,
-        `  # ${setStatsData.player2Stats.doublePositive}, + ${setStatsData.player2Stats.positive}, / ${setStatsData.player2Stats.overpass}, - ${setStatsData.player2Stats.negative}, = ${setStatsData.player2Stats.doubleNegative}`,
+        `  ## ${setStatsData.player2Stats.doublePositive}, + ${setStatsData.player2Stats.positive}, / ${setStatsData.player2Stats.overpass}, - ${setStatsData.player2Stats.negative}, = ${setStatsData.player2Stats.doubleNegative}`,
         '',
         `Total del Set: ${Object.values(setStatsData.stats).reduce((a, b) => a + b, 0)} acciones`,
-        `  # ${setStatsData.stats.doublePositive}, + ${setStatsData.stats.positive}, / ${setStatsData.stats.overpass}, - ${setStatsData.stats.negative}, = ${setStatsData.stats.doubleNegative}`
+        `  ## ${setStatsData.stats.doublePositive}, + ${setStatsData.stats.positive}, / ${setStatsData.stats.overpass}, - ${setStatsData.stats.negative}, = ${setStatsData.stats.doubleNegative}`
       ];
       
       doc.text(setStatsText, 15, 135);
@@ -476,7 +476,7 @@ const handleDownloadPDF = async () => {
     doc.text("Descripción", 97, criterioPosY + 5);
     
     const criterios = [
-      { symbol: "#", tipo: "Doble Positivo", desc: "Acción perfecta o punto directo" },
+      { symbol: "##", tipo: "Doble Positivo", desc: "Acción perfecta o punto directo" },
       { symbol: "+", tipo: "Positivo", desc: "Acción que genera ventaja para el equipo" },
       { symbol: "/", tipo: "Overpass", desc: "Acción que resulta en pase al campo contrario" },
       { symbol: "-", tipo: "Negativo", desc: "Acción que genera desventaja para el equipo" },
@@ -722,7 +722,7 @@ const handleDownloadPDF = async () => {
                   </h4>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={[
-                      { name: '#', value: currentStats.doublePositive, color: '#22c55e' },
+                      { name: '##', value: currentStats.doublePositive, color: '#22c55e' },
                       { name: '+', value: currentStats.positive, color: '#3b82f6' },
                       { name: '/', value: currentStats.overpass, color: '#f59e0b' },
                       { name: '-', value: currentStats.negative, color: '#ef4444' },
