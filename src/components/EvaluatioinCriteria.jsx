@@ -6,42 +6,42 @@ const EvaluationCriteria = () => {
   
   const criterios = {
     "SAQUE": [
-      { symbol: "##", type: "Doble Positivo", description: "Punto directo (ACE)" },
+      { symbol: "#", type: "Doble Positivo", description: "Punto directo (ACE)" },
       { symbol: "+", type: "Positivo", description: "Saque que complica la recepción del rival" },
       { symbol: "/", type: "Overpass", description: "Al ser tocado por la recepción del rival pasa directo al otro campo" },
       { symbol: "-", type: "Negativo", description: "Saque fácil para la recepción del rival" },
       { symbol: "=", type: "Doble Negativo", description: "Error" }
     ],
     "RECEPCIÓN": [
-      { symbol: "##", type: "Doble Positiva", description: "Perfecta que permite todas las opciones de distribución del armador" },
+      { symbol: "#", type: "Doble Positiva", description: "Perfecta que permite todas las opciones de distribución del armador" },
       { symbol: "+", type: "Positiva", description: "Buena que permite al menos 2 opciones de distribución" },
       { symbol: "/", type: "Overpass", description: "Recepción toca al jugador y la bola pasa directo al otro campo" },
       { symbol: "-", type: "Negativa", description: "Recepción mala fuera de la zona de 3 metros" },
       { symbol: "=", type: "Doble Negativa", description: "Error" }
     ],
     "ATAQUE": [
-      { symbol: "##", type: "Doble Positivo", description: "Punto directo" },
+      { symbol: "#", type: "Doble Positivo", description: "Punto directo" },
       { symbol: "+", type: "Positivo", description: "Ataque que complica la defensa del rival" },
       { symbol: "/", type: "Overpass", description: "Ataque bloqueado por el rival" },
       { symbol: "-", type: "Negativo", description: "Defendido fácil por el rival" },
       { symbol: "=", type: "Doble Negativo", description: "Error" }
     ],
     "BLOQUEO": [
-      { symbol: "##", type: "Doble Positivo", description: "Punto directo" },
+      { symbol: "#", type: "Doble Positivo", description: "Punto directo" },
       { symbol: "+", type: "Positivo", description: '"Frenar" el ataque para una defensa positiva en nuestro campo' },
       { symbol: "/", type: "Overpass", description: "Falta detenida por el árbitro (toque de red, invasión)" },
       { symbol: "-", type: "Negativo", description: "Bola toca nuestro bloqueo pero la bola continúa en campo rival" },
       { symbol: "=", type: "Doble Negativo", description: "Error (Blockout, bola entre las manos, mal contacto)" }
     ],
     "DEFENSA": [
-      { symbol: "##", type: "Doble Positivo", description: "Defensa que permite todas las opciones de distribución" },
+      { symbol: "#", type: "Doble Positivo", description: "Defensa que permite todas las opciones de distribución" },
       { symbol: "+", type: "Positivo", description: 'Defensa "buena" que permite al menos 2 opciones de distribución' },
       { symbol: "/", type: "Overpass", description: "Al ser tocado por la defensa pasa directo al otro campo" },
       { symbol: "-", type: "Negativo", description: "Defensa mala fuera de la zona de 3 metros" },
       { symbol: "=", type: "Doble Negativo", description: "Error" }
     ],
     "ARMADO": [
-      { symbol: "##", type: "Doble Positivo", description: "El armador puede dejar al atacante sin bloqueo" },
+      { symbol: "#", type: "Doble Positivo", description: "El armador puede dejar al atacante sin bloqueo" },
       { symbol: "+", type: "Positivo", description: "El armador puede dejar al atacante con 1 bloqueo" },
       { symbol: "/", type: "Overpass", description: "Al momento del armado por impresición pasa la bola al campo contrario" },
       { symbol: "-", type: "Negativo", description: "Bola pegada, bola muy baja, bola complicada para el atacante" },

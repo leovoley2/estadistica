@@ -47,7 +47,7 @@ const ActionTimeline = () => {
 
   const getStatTypeSymbol = (statType) => {
     switch(statType) {
-      case 'doublePositive': return '##';
+      case 'doublePositive': return '#';
       case 'positive': return '+';
       case 'overpass': return '/';
       case 'negative': return '-';
