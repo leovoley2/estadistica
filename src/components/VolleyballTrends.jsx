@@ -41,8 +41,10 @@ const VolleyballTrends = () => {
   const { statsData, trendsData, setTrendsData, matchData } = useVolleyball();
   const deviceSize = useDeviceSize();
   const canvasRef = useRef(null);
-  const [heatmap, setHeatmap] = useState(new Map());
+  const [actions, setActions] = useState([]); // Array de acciones con puntos de inicio y fin
+  const [currentStartPoint, setCurrentStartPoint] = useState(null); // Punto inicial temporal
   const [heatmapColor, setHeatmapColor] = useState('red');
+  const [actionType, setActionType] = useState('tiro'); // 'tiro' o 'ataque'
   const [teamName, setTeamName] = useState(trendsData.teamName || statsData.name || '');
   const [selectedSkill, setSelectedSkill] = useState(statsData.selectedSkill || '');
   const [selectedPlayer, setSelectedPlayer] = useState(null); // null = equipo completo
@@ -88,7 +90,7 @@ const VolleyballTrends = () => {
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [deviceSize, heatmap, heatmapColor]);
+  }, [deviceSize, actions, currentStartPoint, heatmapColor]);
 
   // Actualizar color del mapa de calor basado en el jugador seleccionado
   useEffect(() => {
@@ -176,18 +178,95 @@ const VolleyballTrends = () => {
       }
     }
 
-    // Dibujar zonas de calor
-    heatmap.forEach((value, key) => {
-      const [x, y] = key.split(',').map(Number);
-      const radius = Math.min(30, width * 0.05);
-      const heatGradient = context.createRadialGradient(x, y, 0, x, y, radius);
-      heatGradient.addColorStop(0, getHeatMapColor(value.intensity, value.color));
-      heatGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      context.fillStyle = heatGradient;
+    // Dibujar todas las acciones (líneas con puntos de inicio y fin)
+    actions.forEach((action) => {
+      const { startX, startY, endX, endY, color, type } = action;
+      
+      // Obtener color según el jugador
+      let lineColor;
+      if (color === 'blue') {
+        lineColor = 'rgba(0, 0, 255, 0.7)';
+      } else if (color === 'green') {
+        lineColor = 'rgba(0, 128, 0, 0.7)';
+      } else {
+        lineColor = 'rgba(255, 0, 0, 0.7)';
+      }
+
+      // Dibujar línea
+      context.strokeStyle = lineColor;
+      context.lineWidth = Math.max(3, width * 0.006);
+      
+      // Aplicar estilo según tipo de acción
+      if (type === 'ataque') {
+        context.setLineDash([10, 10]); // Línea punteada para ataque
+      } else {
+        context.setLineDash([]); // Línea continua para tiro/coloque
+      }
+      
       context.beginPath();
-      context.arc(x, y, radius, 0, Math.PI * 2);
+      context.moveTo(startX, startY);
+      context.lineTo(endX, endY);
+      context.stroke();
+      
+      // Resetear línea
+      context.setLineDash([]);
+      
+      // Dibujar punto inicial (círculo relleno)
+      context.fillStyle = lineColor;
+      context.beginPath();
+      context.arc(startX, startY, Math.max(5, width * 0.01), 0, Math.PI * 2);
+      context.fill();
+      
+      // Dibujar borde del punto inicial
+      context.strokeStyle = '#FFFFFF';
+      context.lineWidth = 2;
+      context.stroke();
+      
+      // Dibujar punto final (círculo con flecha)
+      context.fillStyle = lineColor;
+      context.beginPath();
+      context.arc(endX, endY, Math.max(6, width * 0.012), 0, Math.PI * 2);
+      context.fill();
+      
+      // Borde del punto final
+      context.strokeStyle = '#FFFFFF';
+      context.lineWidth = 2;
+      context.stroke();
+      
+      // Dibujar flecha en el punto final
+      const angle = Math.atan2(endY - startY, endX - startX);
+      const arrowSize = Math.max(10, width * 0.02);
+      
+      context.fillStyle = lineColor;
+      context.beginPath();
+      context.moveTo(endX, endY);
+      context.lineTo(
+        endX - arrowSize * Math.cos(angle - Math.PI / 6),
+        endY - arrowSize * Math.sin(angle - Math.PI / 6)
+      );
+      context.lineTo(
+        endX - arrowSize * Math.cos(angle + Math.PI / 6),
+        endY - arrowSize * Math.sin(angle + Math.PI / 6)
+      );
+      context.closePath();
       context.fill();
     });
+
+    // Dibujar punto inicial temporal si existe
+    if (currentStartPoint) {
+      context.fillStyle = 'rgba(255, 255, 0, 0.8)';
+      context.strokeStyle = '#000000';
+      context.lineWidth = 2;
+      context.beginPath();
+      context.arc(currentStartPoint.x, currentStartPoint.y, Math.max(7, width * 0.014), 0, Math.PI * 2);
+      context.fill();
+      context.stroke();
+      
+      // Agregar texto indicador
+      context.fillStyle = '#000000';
+      context.font = `bold ${Math.max(12, width * 0.03)}px Arial`;
+      context.fillText('Inicio', currentStartPoint.x + 10, currentStartPoint.y - 10);
+    }
     
     // Añadir leyenda
     context.font = `${Math.max(10, width * 0.025)}px Arial`;
@@ -218,25 +297,34 @@ const VolleyballTrends = () => {
     const x = ((event.touches ? event.touches[0].clientX : event.clientX) - rect.left) * scaleX;
     const y = ((event.touches ? event.touches[0].clientY : event.clientY) - rect.top) * scaleY;
 
-    const key = `${x},${y}`;
-    const newHeatmap = new Map(heatmap);
-    const currentValue = heatmap.get(key);
+    if (!currentStartPoint) {
+      // Primer click: establecer punto inicial
+      setCurrentStartPoint({ x, y });
+    } else {
+      // Segundo click: establecer punto final y crear la acción
+      const newAction = {
+        startX: currentStartPoint.x,
+        startY: currentStartPoint.y,
+        endX: x,
+        endY: y,
+        color: heatmapColor,
+        type: actionType, // 'tiro' o 'ataque'
+        player: selectedPlayer,
+        timestamp: new Date(),
+        score: `${matchData.teamScore}-${matchData.opponentScore}`
+      };
+      
+      setActions([...actions, newAction]);
+      setCurrentStartPoint(null); // Resetear punto inicial
+    }
     
-    newHeatmap.set(key, {
-      intensity: Math.min((currentValue?.intensity || 0) + 0.25, 1),
-      color: heatmapColor,
-      player: selectedPlayer,
-      timestamp: new Date(),
-      score: `${matchData.teamScore}-${matchData.opponentScore}`
-    });
-    
-    setHeatmap(newHeatmap);
     drawCourt();
   };
 
   const handleReset = () => {
     if (window.confirm('¿Está seguro de que desea reiniciar el mapa de calor?')) {
-      setHeatmap(new Map());
+      setActions([]);
+      setCurrentStartPoint(null);
       drawCourt();
     }
   };
@@ -286,18 +374,52 @@ const VolleyballTrends = () => {
 
       // Leyenda de jugadores
       doc.setFontSize(10);
+      doc.setTextColor(0, 0, 0);
+      doc.text('Leyenda de Jugadores:', 20, 125);
+      
       doc.setDrawColor(0);
       doc.setFillColor(255, 0, 0);
-      doc.circle(20, 130, 3, 'F');
-      doc.text('Equipo completo', 25, 132);
+      doc.circle(20, 133, 2, 'F');
+      doc.text('Equipo completo', 25, 135);
       
       doc.setFillColor(0, 0, 255);
-      doc.circle(70, 130, 3, 'F');
-      doc.text('Jugador 1', 75, 132);
+      doc.circle(70, 133, 2, 'F');
+      doc.text('Jugador 1', 75, 135);
       
       doc.setFillColor(0, 128, 0);
-      doc.circle(110, 130, 3, 'F');
-      doc.text('Jugador 2', 115, 132);
+      doc.circle(110, 133, 2, 'F');
+      doc.text('Jugador 2', 115, 135);
+      
+      // Leyenda de tipos de acción
+      doc.text('Tipos de Acción:', 20, 145);
+      
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.5);
+      doc.line(20, 150, 35, 150);
+      doc.text('Tiro/Coloque (línea continua)', 40, 152);
+      
+      doc.setLineDash([2, 2]);
+      doc.line(20, 157, 35, 157);
+      doc.setLineDash([]);
+      doc.text('Ataque contundente (línea punteada)', 40, 159);
+      
+      // Estadísticas de acciones
+      const tiroCount = actions.filter(a => a.type === 'tiro').length;
+      const ataqueCount = actions.filter(a => a.type === 'ataque').length;
+      const player1Count = actions.filter(a => a.player === 1).length;
+      const player2Count = actions.filter(a => a.player === 2).length;
+      const teamCount = actions.filter(a => a.player === null).length;
+      
+      doc.text('Resumen de Acciones:', 20, 170);
+      doc.setFontSize(9);
+      doc.text([
+        `Total de acciones registradas: ${actions.length}`,
+        `Tiros/Coloque: ${tiroCount}`,
+        `Ataques contundentes: ${ataqueCount}`,
+        `Acciones Jugador 1: ${player1Count}`,
+        `Acciones Jugador 2: ${player2Count}`,
+        `Acciones de equipo: ${teamCount}`
+      ], 20, 178);
 
       doc.save(`mapa-calor-${teamName.replace(/\s+/g, '-')}-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
     } catch (error) {
@@ -363,6 +485,40 @@ const VolleyballTrends = () => {
               />
             </div>
 
+            <div className="flex-grow">
+              <label className="block text-xs font-medium text-gray-700 mb-1">Tipo de Acción</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActionType('tiro')}
+                  className={`flex-1 px-3 py-2 text-sm rounded-md transition-all ${
+                    actionType === 'tiro'
+                      ? 'bg-blue-600 text-white shadow-md transform scale-105'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <div className="flex flex-col items-center">
+                    <div className="h-1 w-12 bg-current mb-1"></div>
+                    <span className="text-xs">Tiro/Coloque</span>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActionType('ataque')}
+                  className={`flex-1 px-3 py-2 text-sm rounded-md transition-all ${
+                    actionType === 'ataque'
+                      ? 'bg-orange-600 text-white shadow-md transform scale-105'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <div className="flex flex-col items-center">
+                    <div className="h-1 w-12 border-b-2 border-dashed border-current mb-1"></div>
+                    <span className="text-xs">Ataque</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+
             <div className="flex space-x-2 mt-auto ml-auto">
               <button
                 type="button"
@@ -398,13 +554,26 @@ const VolleyballTrends = () => {
           </div>
 
           <div className="mt-4 text-sm text-gray-600">
-            <p className="font-medium">Instrucciones:</p>
+            <p className="font-medium mb-2">Instrucciones:</p>
             <ul className="list-disc pl-5 space-y-1">
-              <li>Toque la cancha para marcar las zonas</li>
-              <li>Seleccione un jugador específico o "Ambos" para registrar sus datos</li>
-              <li>Presione varias veces en el mismo lugar para intensificar el color</li>
-              <li>Use el botón "Limpiar" para reiniciar el mapa de calor</li>
+              <li><strong>Primer click:</strong> Marca el punto de inicio de la acción (donde comienza el movimiento)</li>
+              <li><strong>Segundo click:</strong> Marca el punto final de la acción (donde termina el movimiento)</li>
+              <li><strong>Línea continua:</strong> Representa tiro o coloque</li>
+              <li><strong>Línea punteada:</strong> Representa ataque contundente</li>
+              <li>Seleccione un jugador específico para ver sus acciones en colores diferentes:</li>
+              <li className="ml-4">
+                <span className="inline-block w-3 h-3 bg-blue-600 mr-2"></span>Azul = Jugador 1
+                <span className="inline-block w-3 h-3 bg-green-600 ml-4 mr-2"></span>Verde = Jugador 2
+                <span className="inline-block w-3 h-3 bg-red-600 ml-4 mr-2"></span>Rojo = Equipo
+              </li>
+              <li>Use el botón "Limpiar" para reiniciar el mapa</li>
             </ul>
+            {currentStartPoint && (
+              <div className="mt-3 p-3 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800">
+                <p className="font-semibold">⚠️ Punto de inicio marcado</p>
+                <p className="text-xs mt-1">Haga click en la cancha para marcar el punto final</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
